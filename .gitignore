@@ -1,0 +1,7 @@
+node_modules/
+npm-debug.log*
+
+# Real client ids, client secrets, and application keys only ever live here, locally.
+.env
+.env.*
+!.env.example

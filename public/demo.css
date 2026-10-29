@@ -1,0 +1,212 @@
+:root {
+  --bg: #0e1116;
+  --side: #0b0d12;
+  --panel: #161b22;
+  --line: #2a3142;
+  --text: #e8edf5;
+  --muted: #9aa3b2;
+  --green: #1f9d45;
+  --green-fill: #12331f;
+  --green-mark: #13c636;
+  --link: #8eb4ff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+a { color: var(--link); }
+
+h1 { font-size: 28px; font-weight: 650; margin: 0 0 8px; }
+h2 { font-size: 18px; font-weight: 650; margin: 0 0 12px; }
+
+.muted { color: var(--muted); margin: 0 0 18px; }
+.small { font-size: 14px; margin-top: 10px; }
+
+code {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  word-break: break-all;
+}
+
+/* Partner site: left rail and main column. */
+.shell { display: flex; min-height: 100vh; }
+
+aside {
+  width: 232px;
+  flex: none;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  padding: 18px 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  padding: 6px 10px 22px;
+}
+
+.logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--green-fill);
+  color: #7dffb0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+nav a {
+  display: block;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+nav a.active,
+nav a:hover { background: #1b2230; color: var(--text); }
+
+.main { flex: 1; min-width: 0; padding: 22px 32px 40px; }
+
+.stack { display: flex; flex-direction: column; gap: 16px; max-width: 720px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 28px;
+}
+
+.kicker {
+  margin: 0 0 10px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+ol, ul { margin: 0; padding-left: 18px; }
+ol li { margin: 0 0 10px; color: var(--muted); }
+ol strong { color: var(--text); }
+ul.names { margin: 0 0 18px; }
+ul.names li { margin-bottom: 6px; }
+
+/* The sign-in control: a green pill with a round "e" mark. */
+a.etoro,
+a.ghost,
+button.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 14px;
+  text-decoration: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+a.etoro {
+  gap: 10px;
+  padding: 10px 22px;
+  background: #ffffff;
+  color: #1b1e24;
+  border: 1px solid #ffffff;
+}
+
+a.etoro:hover { background: #eef1f5; border-color: #eef1f5; }
+
+a.etoro svg { width: 36px; height: 14px; flex: none; }
+
+a.ghost,
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+/* Connected page: top bar and a centered stage, no rail. */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--line);
+  background: var(--side);
+}
+
+.topbar .brand { padding: 0; }
+
+.stage { max-width: 640px; margin: 0 auto; padding: 48px 24px 72px; }
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: #b6f5c9;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-mark); display: inline-block; }
+
+.details .row {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  gap: 16px;
+  align-items: start;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.details .row:first-child { border-top: 0; padding-top: 0; }
+.details .row:last-child { padding-bottom: 0; }
+.details .label { color: var(--muted); font-size: 14px; padding-top: 2px; }
+.details .value { margin: 0; font-size: 15px; }
+
+.notice {
+  margin: 16px 0 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.actions { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 24px; }
+.actions form { margin: 0; }
+
+@media (max-width: 800px) {
+  .shell { flex-direction: column; }
+  aside { width: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 12px 10px; }
+  .brand { padding-bottom: 12px; }
+  nav { display: flex; flex-direction: column; gap: 8px; }
+  nav a { margin-bottom: 0; }
+  .main { padding: 16px 16px 32px; }
+  .card { padding: 20px; }
+  h1 { font-size: 24px; }
+  a.etoro, button.ghost, .actions form { width: 100%; justify-content: center; }
+  .topbar { padding: 14px 16px; }
+  .stage { padding: 28px 16px 48px; }
+  .details .row { grid-template-columns: 1fr; gap: 4px; }
+}

@@ -1,0 +1,19 @@
+# Runs the demo on this machine as one container and one Node process.
+#
+# Values come from .env, which you create by copying .env.example. .env is gitignored
+# and stays on your machine. If it does not exist, the demo still starts and every page
+# names the settings it is missing.
+services:
+  partner-demo:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "3000"
+      # The two secrets can come from this machine's environment instead of a file.
+      # A value set in the environment wins over one in .env.
+      ETORO_CLIENT_SECRET: ${ETORO_CLIENT_SECRET:-}
+      ETORO_APP_KEY: ${ETORO_APP_KEY:-}
+    ports:
+      - "3000:3000"
