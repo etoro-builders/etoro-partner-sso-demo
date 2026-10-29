@@ -40,7 +40,7 @@ const HOSTS = USING_HOST_OVERRIDES ? HOST_OVERRIDES : PRODUCTION_HOSTS;
 // The client secret has no default and never goes in code. It comes from the
 // ETORO_CLIENT_SECRET variable, which a real partner fills from a vault.
 const DEMO_APPLICATION = Object.freeze({
-  ETORO_CLIENT_ID: 'ed1ba612-4bc7-4cb4-b782-5173f26c855f',
+  ETORO_CLIENT_ID: '603b0448-e525-4a4d-8c23-50cd3d6d15fa',
   ETORO_REDIRECT_URI: 'http://localhost:3000/api/auth/callback',
   ETORO_FLOW_C_REDIRECT_URI: 'http://localhost:3000/api/auth/silent-login/callback',
 });
