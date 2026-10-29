@@ -7,6 +7,7 @@
   --muted: #9aa3b2;
   --green: #1f9d45;
   --green-fill: #12331f;
+  --green-text: #d9ffe6;
   --green-mark: #13c636;
   --link: #8eb4ff;
 }
@@ -122,16 +123,12 @@ button.ghost {
 }
 
 a.etoro {
-  gap: 10px;
-  padding: 10px 22px;
-  background: #ffffff;
-  color: #1b1e24;
-  border: 1px solid #ffffff;
+  background: var(--green-fill);
+  color: var(--green-text);
+  border: 1px solid var(--green);
 }
 
-a.etoro:hover { background: #eef1f5; border-color: #eef1f5; }
-
-a.etoro svg { width: 36px; height: 14px; flex: none; }
+a.etoro svg { width: 31px; height: 12px; flex: none; }
 
 a.ghost,
 button.ghost {
