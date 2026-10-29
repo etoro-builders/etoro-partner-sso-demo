@@ -3,6 +3,7 @@
 # Values come from .env, which you create by copying .env.example. .env is gitignored
 # and stays on your machine. If it does not exist, the demo still starts and every page
 # names the settings it is missing.
+name: etoro-partner-sso-demo
 services:
   partner-demo:
     build: .
