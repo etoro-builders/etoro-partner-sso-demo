@@ -68,15 +68,26 @@ When your IP addresses change, send the new list before you switch traffic. Call
 
 ## Run it with Docker
 
-You need Docker with Compose. Nothing else is installed on your machine.
+You need Docker with Compose and an eToro account. Nothing else is installed on your machine.
 
-```bash
-docker compose up --build
-```
+1. Register your own application on the [eToro Builders portal](https://builders.etoro.com/app-registration), with these two redirect URIs:
+   - `http://localhost:3000/api/auth/callback`
+   - `http://localhost:3000/api/auth/silent-login/callback`
 
-Open <http://localhost:3000>. Every page opens. Each sign-in button either works or names the settings it still needs. The startup log lists the same names, never the values.
+   You become the application's admin, so you can sign in to it with your own eToro account while it is still in development. The portal shows the client secret only once, so keep it.
+2. Put your client id in `ETORO_CLIENT_ID` in [`src/config.js`](src/config.js).
+3. Start the demo with your client secret in the environment of the shell that runs it:
 
-[`src/config.js`](src/config.js) holds the client id and callbacks of eToro's own demo application. Only eToro's test account can sign in to it, and its client secret is not published. To sign in with your own product, replace the client id and both callbacks in that file with your application's values, and give the demo your client secret as described in [Secrets](#secrets).
+   ```bash
+   export ETORO_CLIENT_SECRET='<your client secret>'
+   docker compose up --build
+   ```
+
+   In Windows PowerShell, use `$env:ETORO_CLIENT_SECRET = '<your client secret>'` instead of `export`.
+
+Open <http://localhost:3000> and click **Sign in with eToro**. That is flow A. Flows B and C also need the partner setup listed in [What you need from eToro first](#what-you-need-from-etoro-first). Until then their buttons name the settings they still need, and the startup log lists the same names, never the values.
+
+The client id that ships in `src/config.js` belongs to eToro's own demo application. Only eToro's test account can sign in to it, and its client secret is not published.
 
 eToro must have registered your callback URLs. Outside your own machine they must be HTTPS. Put the demo behind an HTTPS address you control, for example a reverse proxy or a tunnel to port 3000, register that address with eToro, put it in `src/config.js`, and restart with `docker compose up --build`. The cookies get the `Secure` flag when the request arrives over HTTPS.
 
