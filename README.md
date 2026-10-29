@@ -158,6 +158,13 @@ src/server.js       The routes for flows A, B, and C
 
 Each file starts with a comment that explains what it does and why. Each call to eToro says who calls it and what must not be sent.
 
+## Further reading
+
+The full partner documentation is on the eToro API portal.
+
+- [SSO with OAuth 2.0](https://api-portal.etoro.com/core/getting-started/sso-oauth): application registration, the authorization request with PKCE, the code exchange, ID token validation, and the security checklist. Flows A and B follow it.
+- [Partner integration flow](https://api-portal.etoro.com/partners/integration): what a partner does after sign-in, such as linking the accounts and reporting events back to eToro.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
