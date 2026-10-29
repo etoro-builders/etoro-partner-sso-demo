@@ -62,7 +62,7 @@ Replace `YOUR_HOST` with the HTTPS address the demo runs on.
 | The public IPv4 addresses your servers call eToro from | The machine that runs the demo | Every server call with a user key |
 | An icon URL and your product name | Your own | The consent screen |
 
-The demo asks only for `scope=openid`. It needs no extra scopes.
+The demo sends `scope=openid` and needs no other permission. eToro grants the permissions registered for your application, whatever the request asks for, so register as few as you can.
 
 When your IP addresses change, send the new list before you switch traffic. Calls from any other address are rejected.
 
@@ -70,11 +70,12 @@ When your IP addresses change, send the new list before you switch traffic. Call
 
 You need Docker with Compose and an eToro account. Nothing else is installed on your machine.
 
-1. Register your own application on the [eToro Builders portal](https://builders.etoro.com/app-registration), with these two redirect URIs:
-   - `http://localhost:3000/api/auth/callback`
-   - `http://localhost:3000/api/auth/silent-login/callback`
+1. Register your own application on the [eToro Builders portal](https://builders.etoro.com/app-registration):
+   - Redirect URIs: `http://localhost:3000/api/auth/callback` and `http://localhost:3000/api/auth/silent-login/callback`.
+   - Icon URL: an image at a public HTTPS address. The portal does not accept `localhost` here. You can use this repository's icon: `https://cdn.jsdelivr.net/gh/etoro-builders/etoro-partner-sso-demo@main/public/icon.svg`.
+   - Permissions: the portal needs at least one. `profile` is enough. The consent screen shows it as Public Profile.
 
-   You become the application's admin, so you can sign in to it with your own eToro account while it is still in development. The portal shows the client secret only once, so keep it.
+   You become the application's admin, so you can sign in to it with your own eToro account while it is still in development. The portal shows the client secret only once, so keep it. If the portal says your account may not create applications, ask eToro to allow it for your account.
 2. Put your client id in `ETORO_CLIENT_ID` in [`src/config.js`](src/config.js).
 3. Start the demo with your client secret in the environment of the shell that runs it:
 
