@@ -1,6 +1,6 @@
-# Sign in with eToro: partner demo
+# eToro partner SSO demo
 
-A small Node.js app that shows the partner side of signing customers in between eToro and your product, without signing in twice.
+A small Node.js app that shows the partner side of signing customers in between eToro and your product, without signing in twice. It covers both directions: from eToro into your product (Sign in with eToro, and Continue with eToro from a button inside eToro), and from your product into eToro (Open eToro).
 
 It is for developers at a company that has agreed an integration with eToro and wants to see working code before building it into their own product. It is a demo, not a library. Read it, run it, and copy the parts you need.
 
