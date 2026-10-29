@@ -35,7 +35,7 @@ const HOSTS = Object.freeze({
 // None of them is secret. Keep them in your normal configuration, per environment.
 const APPLICATION = Object.freeze({
   // Application id (client_id). Identifies your product to eToro. Given by eToro in writing.
-  ETORO_CLIENT_ID: '603b0448-e525-4a4d-8c23-50cd3d6d15fa',
+  ETORO_CLIENT_ID: '7e24a989-6069-4735-9bc5-16d75494fd96',
 
   // Your flow A callback, exactly as registered with eToro for this client id, character for
   // character. eToro accepts http only for localhost. Anywhere else it must be HTTPS, for
