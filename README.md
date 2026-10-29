@@ -71,53 +71,52 @@ When your IP addresses change, send the new list before you switch traffic. Call
 You need Docker with Compose. Nothing else is installed on your machine.
 
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 
-Open <http://localhost:3000>. With an empty `.env`, every page opens, and each sign-in button shows which settings are still empty. The startup log lists the same names, never the values.
+Open <http://localhost:3000>. Every page opens. Each sign-in button either works or names the settings it still needs. The startup log lists the same names, never the values.
 
-The code ships with the client id and callbacks of eToro's own demo application, in [`src/config.js`](src/config.js). Only eToro's test account can sign in to it, and its client secret is not published. To sign in with your own product, replace the client id and both callbacks with your application's values, and set your client secret.
+[`src/config.js`](src/config.js) holds the client id and callbacks of eToro's own demo application. Only eToro's test account can sign in to it, and its client secret is not published. To sign in with your own product, replace the client id and both callbacks in that file with your application's values, and give the demo your client secret as described in [Secrets](#secrets).
 
-eToro must have registered your callback URLs. Outside your own machine they must be HTTPS. Put the demo behind an HTTPS address you control, for example a reverse proxy or a tunnel to port 3000, register that address with eToro, then fill in `.env` and restart. The cookies get the `Secure` flag when the request arrives over HTTPS.
+eToro must have registered your callback URLs. Outside your own machine they must be HTTPS. Put the demo behind an HTTPS address you control, for example a reverse proxy or a tunnel to port 3000, register that address with eToro, put it in `src/config.js`, and restart with `docker compose up --build`. The cookies get the `Secure` flag when the request arrives over HTTPS.
 
 Stop it with `Ctrl+C`, or `docker compose down`.
 
 ## Settings
 
-All settings are environment variables, read by one module: [`src/config.js`](src/config.js). A real partner keeps the same values in its own configuration system.
+Every setting is written in one file, [`src/config.js`](src/config.js), next to a comment that says where a real partner keeps it. The values there belong to eToro's demo application. Replace them with yours.
 
-| Setting | Needed by | Notes |
-|---|---|---|
-| `ETORO_CLIENT_ID` | A, B, C | Empty means eToro's demo application. |
-| `ETORO_CLIENT_SECRET` | A, B, C | Secret. Keep it in a vault. No default. |
-| `ETORO_REDIRECT_URI` | A, B | Your callback URL, character for character as registered. Empty means `http://localhost:3000/api/auth/callback`. |
-| `ETORO_USER_KEY_URL` | B | From eToro, per environment. |
-| `ETORO_APP_KEY` | B | Secret. Keep it in a vault. |
-| `ETORO_PROVIDER_NAME` | B | From eToro. |
-| `ETORO_FLOW_C_REDIRECT_URI` | C | Your flow C callback URL, as registered. Empty means `http://localhost:3000/api/auth/silent-login/callback`. |
-| `ETORO_INITIATE_PAGE_URL` | C | From eToro, per environment. |
-| `ETORO_PARTNER_EVENTS_URL` | Events | Optional. From eToro, per environment. |
-| `ETORO_EVENT_TYPE` | Events | Optional. The event type you agreed with eToro. |
-| `ETORO_AUTHORIZE_URL` | Hosts | Empty means `https://www.etoro.com/sso/`. Must end in `/sso/`. |
-| `ETORO_TOKEN_URL` | Hosts | Empty means `https://www.etoro.com/api/sso/v1/token`. |
-| `ETORO_REVOKE_URL` | Hosts | Empty means `https://www.etoro.com/api/sso/v1/token/revoke`. |
-| `ETORO_JWKS_URL` | Hosts | Empty means `https://www.etoro.com/.well-known/jwks.json`. |
-| `ETORO_ISSUER` | Hosts | Empty means `https://www.etoro.com`. |
-| `ETORO_SUB_ACCOUNTS_URL` | Hosts | Empty means `https://public-api.etoro.com/api/v1/sub-accounts/me/accounts`. |
-| `ETORO_PARTNER_LOGIN_TOKEN_URL` | Hosts | Empty means `https://www.etoro.com/api/sso/v2/silent-login/partner-login-token`. |
+| Setting | Needed by | Where a real partner keeps it | In this demo |
+|---|---|---|---|
+| `ETORO_CLIENT_ID` | A, B, C | Normal configuration | eToro's demo application |
+| `ETORO_CLIENT_SECRET` | A, B, C | Vault | Not in code. See [Secrets](#secrets). |
+| `ETORO_REDIRECT_URI` | A, B | Normal configuration | `http://localhost:3000/api/auth/callback` |
+| `ETORO_USER_KEY_URL` | B | Normal configuration | Empty |
+| `ETORO_APP_KEY` | B | Vault | Not in code. See [Secrets](#secrets). |
+| `ETORO_PROVIDER_NAME` | B | Normal configuration | Empty |
+| `ETORO_FLOW_C_REDIRECT_URI` | C | Normal configuration | `http://localhost:3000/api/auth/silent-login/callback` |
+| `ETORO_INITIATE_PAGE_URL` | C | Normal configuration | Empty |
+| `ETORO_PARTNER_EVENTS_URL` | Events | Normal configuration | Empty. Optional. |
+| `ETORO_EVENT_TYPE` | Events | Normal configuration | Empty. Optional. |
+| `ETORO_AUTHORIZE_URL` | Hosts | Normal configuration | `https://www.etoro.com/sso/`. Must end in `/sso/`. |
+| `ETORO_TOKEN_URL` | Hosts | Normal configuration | `https://www.etoro.com/api/sso/v1/token` |
+| `ETORO_REVOKE_URL` | Hosts | Normal configuration | `https://www.etoro.com/api/sso/v1/token/revoke` |
+| `ETORO_JWKS_URL` | Hosts | Normal configuration | `https://www.etoro.com/.well-known/jwks.json` |
+| `ETORO_ISSUER` | Hosts | Normal configuration | `https://www.etoro.com` |
+| `ETORO_SUB_ACCOUNTS_URL` | Hosts | Normal configuration | `https://public-api.etoro.com/api/v1/sub-accounts/me/accounts` |
+| `ETORO_PARTNER_LOGIN_TOKEN_URL` | Hosts | Normal configuration | `https://www.etoro.com/api/sso/v2/silent-login/partner-login-token` |
+
+The callbacks, user-key address, provider name, initiate page, and hosts are all per environment. Your callbacks must match what you registered with eToro, character for character.
 
 ### One environment at a time
 
-Testing and production use different hosts, keys, and tokens. A token from one environment never works on another. The production hosts from the partner brief are the defaults. To use another environment, set **every** host setting to the hosts eToro gave you for it. If only some are set, every journey stops and names the empty ones.
+Testing and production use different hosts, keys, and tokens. A token from one environment never works on another. The file holds the production hosts from the partner brief. To use another environment, replace **every** host with the hosts eToro gave you for it.
 
 ### Secrets
 
-The client secret and the application key belong in a vault. Never put them in a browser, a mobile app, a URL, or a log line.
+The client secret and the application key belong in a vault. Your server reads them from the vault when it starts. Never put them in code, in git, in a browser, in a mobile app, in a URL, or in a log line.
 
-`.env` is only for a local try, and git ignores it. `.env.example` is committed with every value empty. Never commit a real value.
-
-You can also keep `ETORO_CLIENT_SECRET` and `ETORO_APP_KEY` out of every file. Set them as environment variables on your machine, and Docker Compose passes them into the container. A value in the environment wins over one in `.env`.
+They are the only settings `src/config.js` does not hold. To run the demo with them, set `ETORO_CLIENT_SECRET`, and for flow B `ETORO_APP_KEY`, as environment variables in the shell that runs `docker compose up`. Docker Compose passes them into the container.
 
 The browser holds only this site's session cookie. The tokens, the user key, and `externalUserId` stay on the server, and no page shows them.
 
@@ -145,12 +144,11 @@ The server log shows the call name, the HTTP status, and the OAuth error code. I
 ```text
 LICENSE             Apache License 2.0
 NOTICE              Copyright notice
-.env.example        Every setting, empty
 Dockerfile          The image: Node.js 24, production dependencies only
 docker-compose.yml  The whole runtime
 public/demo.css     The partner site's look
 public/icon.svg     An application icon you can register for the consent screen
-src/config.js       Reads the settings and names what is missing
+src/config.js       Every setting, where each belongs, and the names of what is missing
 src/pkce.js         state, code_verifier, and code_challenge
 src/etoro.js        Every call to eToro, one function each
 src/session.js      In-memory sessions, refresh, and revoke

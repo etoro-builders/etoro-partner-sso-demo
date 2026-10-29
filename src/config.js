@@ -1,23 +1,26 @@
-// Configuration for the demo, read once from environment variables.
+// Configuration for the demo. Every value is written here, in the open, so you can see what
+// the demo uses and where each value belongs in your own product.
 //
-// A real partner keeps these same values in its own configuration system.
-// Addresses belong in normal configuration. The client secret and the application key
-// belong in a vault. None of them ever goes into git, a browser, a URL, or a log line.
+// The values below belong to eToro's demo application. To try your own application, replace
+// them with the values eToro gave you. Each value says where a real partner keeps it:
+//   - normal configuration: addresses, ids, and names. Not secret, but kept per environment.
+//   - vault: the client secret and the application key. Never in code, git, a browser, a URL,
+//     or a log line.
 //
 // This module never reports a value. It only reports the *names* of settings that are
 // empty or invalid, so a page can say what is missing and stop instead of guessing.
 
-function read(name) {
-  return (process.env[name] ?? '').trim();
-}
+// The port the demo listens on. Docker Compose publishes it on the same port.
+const PORT = 3000;
 
-// Production addresses, as written in the eToro partner brief. They are only defaults.
+// eToro HOSTS. Production, as written in the eToro partner brief.
+// Keep them in your normal configuration, one set per environment.
 //
-// eToro gives you a separate set of hosts for testing. Testing and production have
-// different hosts, keys, and tokens, and a token from one environment never works on
-// another. So the hosts move together: if you set any of these variables, you must set
-// all of them, from the same environment. A partial set stops every journey.
-const PRODUCTION_HOSTS = Object.freeze({
+// eToro gives you a separate set of hosts for testing. Testing and production have different
+// hosts, keys, and tokens, and a token from one environment never works on another. So the
+// hosts move together: to use another environment, replace every line below with the hosts
+// eToro gave you for that environment.
+const HOSTS = Object.freeze({
   ETORO_AUTHORIZE_URL: 'https://www.etoro.com/sso/',
   ETORO_TOKEN_URL: 'https://www.etoro.com/api/sso/v1/token',
   ETORO_REVOKE_URL: 'https://www.etoro.com/api/sso/v1/token/revoke',
@@ -27,39 +30,55 @@ const PRODUCTION_HOSTS = Object.freeze({
   ETORO_PARTNER_LOGIN_TOKEN_URL: 'https://www.etoro.com/api/sso/v2/silent-login/partner-login-token',
 });
 
-const HOST_NAMES = Object.keys(PRODUCTION_HOSTS);
-const HOST_OVERRIDES = Object.fromEntries(HOST_NAMES.map((name) => [name, read(name)]));
-const USING_HOST_OVERRIDES = HOST_NAMES.some((name) => HOST_OVERRIDES[name] !== '');
-const HOSTS = USING_HOST_OVERRIDES ? HOST_OVERRIDES : PRODUCTION_HOSTS;
-
-// DEMO APPLICATION. These defaults belong to eToro's own demo application on production,
-// which only eToro's test account can sign in to. Put your own application's details here,
-// or set the ETORO_CLIENT_ID, ETORO_REDIRECT_URI, and ETORO_FLOW_C_REDIRECT_URI variables.
-// Change all three together: the callbacks must be the ones registered for that client id.
-//
-// The client secret has no default and never goes in code. It comes from the
-// ETORO_CLIENT_SECRET variable, which a real partner fills from a vault.
-const DEMO_APPLICATION = Object.freeze({
+// YOUR APPLICATION. These values belong to eToro's demo application on production, which only
+// eToro's test account can sign in to. Replace them with your own application's values.
+// None of them is secret. Keep them in your normal configuration, per environment.
+const APPLICATION = Object.freeze({
+  // Application id (client_id). Identifies your product to eToro. Given by eToro in writing.
   ETORO_CLIENT_ID: '603b0448-e525-4a4d-8c23-50cd3d6d15fa',
+
+  // Your flow A callback, exactly as registered with eToro for this client id, character for
+  // character. eToro accepts http only for localhost. Anywhere else it must be HTTPS, for
+  // example https://your-app.example.com/api/auth/callback.
   ETORO_REDIRECT_URI: 'http://localhost:3000/api/auth/callback',
+
+  // Your flow C callback, exactly as registered with eToro for this client id. Anywhere but
+  // localhost it must be HTTPS, for example https://your-app.example.com/api/auth/silent-login/callback.
   ETORO_FLOW_C_REDIRECT_URI: 'http://localhost:3000/api/auth/silent-login/callback',
+
+  // Flow B: the user-key call address eToro gave you for this environment, in writing.
+  // Never guessed. Flow B stops while it is empty.
+  ETORO_USER_KEY_URL: '',
+
+  // Flow B: the provider name eToro agreed with you for sub-account create.
+  ETORO_PROVIDER_NAME: '',
+
+  // Flow C: the eToro initiate page address eToro gave you for this environment, in writing.
+  ETORO_INITIATE_PAGE_URL: '',
+
+  // Optional: only if you agreed with eToro to report events. The partner-events call address
+  // eToro gave you in writing, and the event type you agreed on.
+  ETORO_PARTNER_EVENTS_URL: '',
+  ETORO_EVENT_TYPE: '',
 });
 
-// The remaining values have no default. eToro gives each of them to you, per environment.
-// The user-key address and the partner-events address are never guessed: eToro sends
-// them in writing, and this demo stops if they are empty.
-const SETTINGS = Object.freeze({
-  ETORO_CLIENT_ID: read('ETORO_CLIENT_ID') || DEMO_APPLICATION.ETORO_CLIENT_ID,
-  ETORO_CLIENT_SECRET: read('ETORO_CLIENT_SECRET'),
-  ETORO_REDIRECT_URI: read('ETORO_REDIRECT_URI') || DEMO_APPLICATION.ETORO_REDIRECT_URI,
-  ETORO_FLOW_C_REDIRECT_URI: read('ETORO_FLOW_C_REDIRECT_URI') || DEMO_APPLICATION.ETORO_FLOW_C_REDIRECT_URI,
-  ETORO_USER_KEY_URL: read('ETORO_USER_KEY_URL'),
-  ETORO_APP_KEY: read('ETORO_APP_KEY'),
-  ETORO_PROVIDER_NAME: read('ETORO_PROVIDER_NAME'),
-  ETORO_INITIATE_PAGE_URL: read('ETORO_INITIATE_PAGE_URL'),
-  ETORO_PARTNER_EVENTS_URL: read('ETORO_PARTNER_EVENTS_URL'),
-  ETORO_EVENT_TYPE: read('ETORO_EVENT_TYPE'),
+// SECRETS. eToro gives you both through the agreed secret channel. Keep them in your vault,
+// and have your server read them from the vault when it starts.
+//
+// They are the only values this file does not hold. The demo reads them from environment
+// variables of the machine that runs it, and Docker Compose passes them into the container.
+// The secret of eToro's demo application is not published.
+const SECRETS = Object.freeze({
+  // Client secret. Proves your server is yours. Flows A, B, and C.
+  ETORO_CLIENT_SECRET: (process.env.ETORO_CLIENT_SECRET ?? '').trim(),
+
+  // Application key (x-api-key). Sent with every user key to the eToro public API. Flow B.
+  ETORO_APP_KEY: (process.env.ETORO_APP_KEY ?? '').trim(),
 });
+
+const SETTINGS = Object.freeze({ ...APPLICATION, ...SECRETS });
+
+const HOST_NAMES = Object.keys(HOSTS);
 
 const URL_SETTINGS = new Set([
   'ETORO_REDIRECT_URI',
@@ -97,12 +116,10 @@ function isAbsoluteHttpUrl(value) {
 
 function hostProblems() {
   const problems = [];
-  const emptyHosts = HOST_NAMES.filter((name) => !HOSTS[name]);
-  if (emptyHosts.length) {
-    problems.push(`${emptyHosts.join(', ')} (set every eToro host together, or none of them)`);
-  }
   for (const name of HOST_NAMES) {
-    if (HOSTS[name] && !isAbsoluteHttpUrl(HOSTS[name])) {
+    if (!HOSTS[name]) {
+      problems.push(name);
+    } else if (!isAbsoluteHttpUrl(HOSTS[name])) {
       problems.push(`${name} (not an absolute URL)`);
     }
   }
@@ -134,11 +151,7 @@ export function missingSettings(journey) {
 
 /** Lines for the startup log. Names only, never values. */
 export function describeSetup() {
-  const lines = [
-    USING_HOST_OVERRIDES
-      ? 'eToro hosts: taken from the ETORO_*_URL and ETORO_ISSUER variables'
-      : 'eToro hosts: production defaults from the partner brief',
-  ];
+  const lines = [];
   for (const journey of Object.keys(REQUIRED_BY_JOURNEY)) {
     const missing = missingSettings(journey);
     lines.push(`${JOURNEY_LABELS[journey]}: ${missing.length ? `missing ${missing.join(', ')}` : 'ready'}`);
@@ -147,7 +160,7 @@ export function describeSetup() {
 }
 
 export const config = Object.freeze({
-  port: Number(read('PORT')) || 3000,
+  port: PORT,
 
   clientId: SETTINGS.ETORO_CLIENT_ID,
   clientSecret: SETTINGS.ETORO_CLIENT_SECRET,

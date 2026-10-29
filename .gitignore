@@ -1,7 +1,6 @@
 node_modules/
 npm-debug.log*
 
-# Real client ids, client secrets, and application keys only ever live here, locally.
+# Secrets never go in git. Files that commonly hold them stay out, just in case.
 .env
 .env.*
-!.env.example

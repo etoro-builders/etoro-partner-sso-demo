@@ -192,7 +192,7 @@ export function missingSettingsPage(title, names) {
     <h1>${escapeHtml(title)}</h1>
     <p class="muted">These settings are empty or invalid. eToro gives you these values for one environment. The demo stops here instead of guessing a host, a client id, or a secret.</p>
     <ul class="names">${names.map((name) => `<li><code>${escapeHtml(name)}</code></li>`).join('')}</ul>
-    <p class="muted">Set them in <code>.env</code>, then restart with <code>docker compose up</code>.</p>
+    <p class="muted">Fill them in <code>src/config.js</code>, then restart with <code>docker compose up --build</code>. The client secret and the application key come from your vault, never from code.</p>
     <p><a href="/">Back</a></p>
   </section>
 </div>`,
