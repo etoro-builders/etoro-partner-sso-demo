@@ -115,7 +115,7 @@ export function landingPage() {
     ${steps([
       ['eToro opened this page.', 'You are already signed in to eToro, so no login form appears.'],
       ['The first time, eToro may ask you to approve', 'what this product can access.'],
-      ['This site links your eToro account.', 'It gets a user key, creates your sub-account, and shows the connected page.'],
+      ['This site links your eToro account.', 'It gets a user key and creates your sub-account, once eToro has set up linking for this product. Then it shows the connected page.'],
     ])}
   </section>
 </div>`,

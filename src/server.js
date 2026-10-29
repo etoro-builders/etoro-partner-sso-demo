@@ -45,6 +45,7 @@ const SESSION_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const JOURNEY_SIGN_IN = 'signIn';
 const JOURNEY_CONTINUE = 'continueWithEtoro';
+const JOURNEY_LINK = 'linkAccount';
 
 // SameSite=Lax, never Strict: the eToro -> callback hop is a cross-site top-level
 // navigation, and a Strict cookie would be dropped on it.
@@ -232,7 +233,12 @@ app.get('/api/auth/callback', async (req, res) => {
   const session = store.createSession(accountId, tokens);
 
   if (journey === JOURNEY_CONTINUE) {
-    await linkAccount(session, tokens.accessToken);
+    const linkMissing = missingSettings(JOURNEY_LINK);
+    if (linkMissing.length) {
+      session.notice = `You are signed in. Linking your eToro account needs the partner setup from eToro, so it was skipped. Missing: ${linkMissing.join(', ')}.`;
+    } else {
+      await linkAccount(session, tokens.accessToken);
+    }
   }
 
   res.cookie(SESSION_COOKIE, session.id, sessionCookieOptions(req));

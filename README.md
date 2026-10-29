@@ -24,7 +24,7 @@ There are three flows. They all use **one application** that eToro registers for
 | `GET /api/auth/login` | A | The server creates `state` and a PKCE pair, keeps them in HttpOnly cookies, and sends the browser to eToro. |
 | `GET /from-etoro` | B | Your landing URL. eToro opens it after the customer clicks the button for your product inside eToro. The customer clicks **Continue with eToro**. |
 | `GET /api/auth/from-etoro` | B | Same as `/api/auth/login`, and remembers that this sign-in came from eToro. |
-| `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token`, and opens a session. For flow B it then gets the user key and creates the sub-account. |
+| `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token`, and opens a session. For flow B it then gets the user key and creates the sub-account. Without the partner setup it skips those two steps and says so. |
 | `GET /connected` | A and B | Says the eToro account is connected. Shows status words only, never an id or a token. |
 | `GET /api/auth/open-etoro` | C | Sends the browser to the eToro initiate page with your `client_id`, your flow C callback URL, and a new `state`. |
 | `GET /api/auth/silent-login/callback` | C | eToro sends the browser back with `tid` and `state`. The server gets a machine token, asks eToro for the one-time link, and sends the browser to the `redirectUrl` eToro returned. |
@@ -85,7 +85,9 @@ You need Docker with Compose and an eToro account. Nothing else is installed on 
 
    In Windows PowerShell, use `$env:ETORO_CLIENT_SECRET = '<your client secret>'` instead of `export`.
 
-Open <http://localhost:3000> and click **Sign in with eToro**. That is flow A. Flows B and C also need the partner setup listed in [What you need from eToro first](#what-you-need-from-etoro-first). Until then their buttons name the settings they still need, and the startup log lists the same names, never the values.
+Open <http://localhost:3000> and click **Sign in with eToro**. That is flow A. Open <http://localhost:3000/from-etoro> and click **Continue with eToro** to try flow B, which signs you in the same way.
+
+Linking the eToro account at the end of flow B, and flow C, need the partner setup listed in [What you need from eToro first](#what-you-need-from-etoro-first). Until then flow B signs you in and skips the link, and the connected page names the settings still needed. The startup log lists the same names, never the values.
 
 The client id that ships in `src/config.js` belongs to eToro's own demo application. Only eToro's test account can sign in to it, and its client secret is not published.
 

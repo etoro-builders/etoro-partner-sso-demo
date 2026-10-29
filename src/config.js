@@ -10,6 +10,18 @@
 // This module never reports a value. It only reports the *names* of settings that are
 // empty or invalid, so a page can say what is missing and stop instead of guessing.
 
+// SECRETS. eToro gives you both through the agreed secret channel. Keep them in your vault,
+// and have your server read them from the vault when it starts.
+//
+// They are the only values this file does not hold. The demo reads them once, here, from
+// environment variables of the machine that runs it, and Docker Compose passes them into the
+// container. The secret of eToro's demo application is not published.
+//
+// Client secret: proves your server is yours. Flows A, B, and C.
+const ETORO_CLIENT_SECRET = (process.env.ETORO_CLIENT_SECRET ?? '').trim();
+// Application key (x-api-key): sent with every user key to the eToro public API. Flow B.
+const ETORO_APP_KEY = (process.env.ETORO_APP_KEY ?? '').trim();
+
 // The port the demo listens on. Docker Compose publishes it on the same port.
 const PORT = 3000;
 
@@ -62,21 +74,7 @@ const APPLICATION = Object.freeze({
   ETORO_EVENT_TYPE: '',
 });
 
-// SECRETS. eToro gives you both through the agreed secret channel. Keep them in your vault,
-// and have your server read them from the vault when it starts.
-//
-// They are the only values this file does not hold. The demo reads them from environment
-// variables of the machine that runs it, and Docker Compose passes them into the container.
-// The secret of eToro's demo application is not published.
-const SECRETS = Object.freeze({
-  // Client secret. Proves your server is yours. Flows A, B, and C.
-  ETORO_CLIENT_SECRET: (process.env.ETORO_CLIENT_SECRET ?? '').trim(),
-
-  // Application key (x-api-key). Sent with every user key to the eToro public API. Flow B.
-  ETORO_APP_KEY: (process.env.ETORO_APP_KEY ?? '').trim(),
-});
-
-const SETTINGS = Object.freeze({ ...APPLICATION, ...SECRETS });
+const SETTINGS = Object.freeze({ ...APPLICATION, ETORO_CLIENT_SECRET, ETORO_APP_KEY });
 
 const HOST_NAMES = Object.keys(HOSTS);
 
@@ -93,8 +91,11 @@ const SIGN_IN = ['ETORO_CLIENT_ID', 'ETORO_CLIENT_SECRET', 'ETORO_REDIRECT_URI']
 const REQUIRED_BY_JOURNEY = Object.freeze({
   // Flow A: the login link, the callback, and the code exchange.
   signIn: SIGN_IN,
-  // Flow B: flow A, then the user key and the sub-account.
-  continueWithEtoro: [...SIGN_IN, 'ETORO_USER_KEY_URL', 'ETORO_APP_KEY', 'ETORO_PROVIDER_NAME'],
+  // Flow B, the sign-in: the same login link, callback, and code exchange as flow A.
+  continueWithEtoro: SIGN_IN,
+  // Flow B, after the sign-in: the user key and the sub-account. eToro sets these up for a
+  // partner. Without them, flow B still signs the customer in and skips the link.
+  linkAccount: ['ETORO_USER_KEY_URL', 'ETORO_APP_KEY', 'ETORO_PROVIDER_NAME'],
   // Flow C: the eToro initiate page, the flow C callback, and the machine token.
   openEtoro: ['ETORO_CLIENT_ID', 'ETORO_CLIENT_SECRET', 'ETORO_FLOW_C_REDIRECT_URI', 'ETORO_INITIATE_PAGE_URL'],
   // Optional partner events, only after flow B has stored the link.
@@ -104,6 +105,7 @@ const REQUIRED_BY_JOURNEY = Object.freeze({
 const JOURNEY_LABELS = Object.freeze({
   signIn: 'Sign in with eToro (flow A)',
   continueWithEtoro: 'Continue with eToro (flow B)',
+  linkAccount: 'Link the eToro account (flow B)',
   openEtoro: 'Open eToro (flow C)',
   partnerEvent: 'Partner event (optional)',
 });
@@ -133,7 +135,7 @@ function hostProblems() {
 
 /**
  * Names of the settings that stop a journey, or an empty list when it may start.
- * @param {'signIn' | 'continueWithEtoro' | 'openEtoro' | 'partnerEvent'} journey
+ * @param {'signIn' | 'continueWithEtoro' | 'linkAccount' | 'openEtoro' | 'partnerEvent'} journey
  * @returns {string[]}
  */
 export function missingSettings(journey) {
