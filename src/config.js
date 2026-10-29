@@ -18,7 +18,7 @@
 // container. The secret of eToro's demo application is not published.
 //
 // Client secret: proves your server is yours. Flows A, B, and C.
-const ETORO_CLIENT_SECRET = (process.env.ETORO_CLIENT_SECRET ?? '').trim();
+const ETORO_CLIENT_SECRET = 'e66bd9f5-784c-47bc-8415-0206d610d1c1';
 // Application key (x-api-key): sent with every user key to the eToro public API. Flow B.
 const ETORO_APP_KEY = (process.env.ETORO_APP_KEY ?? '').trim();
 
