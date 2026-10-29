@@ -13,7 +13,7 @@
 // SECRETS. eToro gives you both through the agreed secret channel. Keep them in your vault,
 // and have your server read them from the vault when it starts.
 //
-// They are the only values this file does not hold. The demo reads them once, here, from
+// The demo reads them once, here, from
 // environment variables of the machine that runs it, and Docker Compose passes them into the
 // container. The secret of eToro's demo application is not published.
 //
