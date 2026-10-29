@@ -225,7 +225,38 @@ export async function mintUserKey(customerAccessToken) {
 }
 
 /**
- * Flow B, steps 5 and 6: create the customer's sub-account on the eToro public API.
+ * Flow B, step 5: find this customer's sub-account with your provider, if eToro already has one.
+ *
+ * eToro keeps one sub-account per customer and provider. Ask before you create one: the
+ * customer may already be linked from another device, or from before your server lost its
+ * record. Reusing that account's externalUserId keeps the customer on one sub-account.
+ *
+ * Same keys as the create call below, on the same address, with GET.
+ *
+ * @returns {Promise<{ externalUserId: string } | undefined>} undefined when there is none yet.
+ */
+export async function findSubAccount(userKey) {
+  const response = await send(config.subAccountsUrl, {
+    method: 'GET',
+    headers: {
+      'x-request-id': randomUUID(),
+      'x-api-key': config.appKey,
+      'x-user-key': userKey,
+    },
+  });
+  const body = await expectOk('sub-account list', response);
+  const accounts = Array.isArray(body?.accounts) ? body.accounts : [];
+  const account = accounts.find((candidate) => candidate?.providerName === config.providerName);
+  if (!account) return undefined;
+  if (typeof account.externalUserId !== 'string' || account.externalUserId === '') {
+    throw new Error('sub-account list returned an account without externalUserId');
+  }
+  return { externalUserId: account.externalUserId };
+}
+
+/**
+ * Flow B, step 6: create the customer's sub-account on the eToro public API. Call it only
+ * after findSubAccount found none.
  *
  * Send the application key and this customer's user key. Do not also send
  * Authorization: Bearer on this request: use the two keys, or a bearer token, never both.
@@ -234,7 +265,8 @@ export async function mintUserKey(customerAccessToken) {
  * Outcomes, from the brief:
  * - 201: the link is stored. Keep account.externalUserId for every later call.
  * - 202: eToro is still processing. The link is not stored yet.
- * - 409: the link already exists. Use the externalUserId you stored before.
+ * - 409: the link already exists, for example from a second sign-in at the same moment.
+ *   Read it with findSubAccount. Never create another one.
  */
 export async function createSubAccount(userKey) {
   const response = await send(config.subAccountsUrl, {

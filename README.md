@@ -24,7 +24,7 @@ There are three flows. They all use **one application** that eToro registers for
 | `GET /api/auth/login` | A | The server creates `state` and a PKCE pair, keeps them in HttpOnly cookies, and sends the browser to eToro. |
 | `GET /from-etoro` | B | Your landing URL. eToro opens it after the customer clicks the button for your product inside eToro. The customer clicks **Continue with eToro**. |
 | `GET /api/auth/from-etoro` | B | Same as `/api/auth/login`, and remembers that this sign-in came from eToro. |
-| `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token`, and opens a session. For flow B it then gets the user key and creates the sub-account. Without the partner setup it skips those two steps and says so. |
+| `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token`, and opens a session. For flow B it then gets the user key and links the sub-account: it reuses the customer's existing sub-account with your provider, and creates one only when there is none. Without the partner setup it skips those steps and says so. |
 | `GET /connected` | A and B | Says the eToro account is connected. Shows status words only, never an id or a token. |
 | `GET /api/auth/open-etoro` | C | Sends the browser to the eToro initiate page with your `client_id`, your flow C callback URL, and a new `state`. |
 | `GET /api/auth/silent-login/callback` | C | eToro sends the browser back with `tid` and `state`. The server gets a machine token, asks eToro for the one-time link, and sends the browser to the `redirectUrl` eToro returned. |
@@ -138,6 +138,7 @@ The browser holds only this site's session cookie. The tokens, the user key, and
 - Sessions and account links live in memory, in one process. A restart forgets them, and a second instance would not see them. A real partner stores them in its own database. It stores the user key encrypted against the customer, and stores `externalUserId` against its own account id for that customer.
 - The demo refreshes each access token about a minute before it expires. It stores the new refresh token, then revokes the old one. A refresh that fails with `invalid_grant` ends the session. With more than one instance, only one may refresh a session at a time.
 - There is one demo customer account per eToro `sub`, so signing out and in again keeps the sub-account link.
+- Each customer gets one sub-account with your provider. Before it creates one, the demo asks eToro for the customer's sub-accounts (`GET` on the same address) and reuses the `externalUserId` of the existing one. So a restart, a second device, or a lost record never creates a second sub-account.
 
 ## Errors you are most likely to see
 
@@ -146,7 +147,7 @@ The browser holds only this site's session cookie. The tokens, the user key, and
 | Any token call | `invalid_grant` | The code or refresh token was used, expired, or revoked, or `redirect_uri` does not match. Start the flow again. |
 | Flow C machine token | `invalid_request` | You sent the client secret twice, in the header and in the body. Send it once. |
 | Any call with a user key | `403` | The call came from an IP address eToro does not have for you. |
-| Sub-account create | `409` | The link already exists. Use the stored `externalUserId`. |
+| Sub-account create | `409` | The link already exists, for example from a second sign-in at the same moment. Read it back with `GET` and use its `externalUserId`. Never create another one. |
 | Flow C partner-login-token | `400` | The `externalUserId` does not belong to your application. Use the value from flow B. |
 | Flow C callback URL | `403` | The callback URL does not match what you registered. |
 

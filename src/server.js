@@ -258,14 +258,25 @@ async function linkAccount(session, customerAccessToken) {
       account.userKey = await etoro.mintUserKey(customerAccessToken);
     }
     if (!account.externalUserId) {
-      const result = await etoro.createSubAccount(account.userKey);
-      if (result.outcome === 'linked') {
-        account.externalUserId = result.externalUserId;
-      } else if (result.outcome === 'processing') {
-        session.notice = 'eToro is still processing your sub-account. The link is not stored yet. Use Continue with eToro again later.';
+      // One sub-account per customer: reuse the one eToro already has, and create only
+      // when there is none. A 409 means another sign-in created it first, so read it back.
+      const existing = await etoro.findSubAccount(account.userKey);
+      if (existing) {
+        account.externalUserId = existing.externalUserId;
       } else {
-        session.notice =
-          'eToro already has a link for this customer, but this demo keeps links in memory and has no stored externalUserId to reuse.';
+        const result = await etoro.createSubAccount(account.userKey);
+        if (result.outcome === 'linked') {
+          account.externalUserId = result.externalUserId;
+        } else if (result.outcome === 'processing') {
+          session.notice = 'eToro is still processing your sub-account. The link is not stored yet. Use Continue with eToro again later.';
+        } else {
+          const created = await etoro.findSubAccount(account.userKey);
+          if (created) {
+            account.externalUserId = created.externalUserId;
+          } else {
+            session.notice = 'eToro says your sub-account exists but has not returned it yet. Use Continue with eToro again later.';
+          }
+        }
       }
     }
   } catch (err) {
