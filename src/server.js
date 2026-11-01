@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { config, describeSetup, missingSettings } from './config.js';
 import * as etoro from './etoro.js';
 import * as pages from './pages.js';
-import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce.js';
+import { generateCodeChallenge, generateCodeVerifier, generateNonce, generateState } from './pkce.js';
 import * as store from './session.js';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
@@ -34,6 +34,7 @@ const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
 // routes that start and finish a sign-in receive them.
 const PKCE_VERIFIER_COOKIE = 'etoro_pkce_verifier';
 const PKCE_STATE_COOKIE = 'etoro_pkce_state';
+const PKCE_NONCE_COOKIE = 'etoro_pkce_nonce';
 const JOURNEY_COOKIE = 'etoro_journey';
 const FLOW_C_STATE_COOKIE = 'etoro_flow_c_state';
 const AUTH_COOKIE_PATH = '/api/auth';
@@ -168,15 +169,18 @@ function startSignIn(journey) {
     if (missing.length) return sendMissing(res, title, missing);
 
     const state = generateState();
+    const nonce = generateNonce();
     const codeVerifier = generateCodeVerifier();
     const options = authCookieOptions(req);
     res.cookie(PKCE_VERIFIER_COOKIE, codeVerifier, options);
     res.cookie(PKCE_STATE_COOKIE, state, options);
+    // The nonce travels in its own cookie and is checked against the id_token in the callback.
+    res.cookie(PKCE_NONCE_COOKIE, nonce, options);
     // Both journeys share one registered callback. This cookie tells the callback whether
     // the attempt came from the landing page, so it knows to run the flow B steps.
     res.cookie(JOURNEY_COOKIE, journey, options);
 
-    return res.redirect(302, etoro.buildAuthorizeUrl({ state, codeChallenge: generateCodeChallenge(codeVerifier) }));
+    return res.redirect(302, etoro.buildAuthorizeUrl({ state, nonce, codeChallenge: generateCodeChallenge(codeVerifier) }));
   };
 }
 
@@ -202,12 +206,13 @@ app.get('/api/auth/from-etoro', startSignIn(JOURNEY_CONTINUE));
 app.get('/api/auth/callback', async (req, res) => {
   const { code, state } = req.query;
   const expectedState = req.cookies[PKCE_STATE_COOKIE];
+  const expectedNonce = req.cookies[PKCE_NONCE_COOKIE];
   const codeVerifier = req.cookies[PKCE_VERIFIER_COOKIE];
   const journey = req.cookies[JOURNEY_COOKIE] === JOURNEY_CONTINUE ? JOURNEY_CONTINUE : JOURNEY_SIGN_IN;
   // One attempt, one use: clear the attempt cookies whatever happens next.
-  clearAuthCookies(res, PKCE_VERIFIER_COOKIE, PKCE_STATE_COOKIE, JOURNEY_COOKIE);
+  clearAuthCookies(res, PKCE_VERIFIER_COOKIE, PKCE_STATE_COOKIE, PKCE_NONCE_COOKIE, JOURNEY_COOKIE);
 
-  if (!isNonEmptyString(code) || !isNonEmptyString(state) || !isNonEmptyString(expectedState) || !isNonEmptyString(codeVerifier)) {
+  if (!isNonEmptyString(code) || !isNonEmptyString(state) || !isNonEmptyString(expectedState) || !isNonEmptyString(expectedNonce) || !isNonEmptyString(codeVerifier)) {
     return sendMessage(res, 400, 'Sign-in could not finish', 'This sign-in attempt has nothing saved to check it against. Start again.');
   }
   if (state !== expectedState) {
@@ -220,7 +225,7 @@ app.get('/api/auth/callback', async (req, res) => {
   let accountId;
   try {
     tokens = await etoro.exchangeCode({ code, codeVerifier });
-    accountId = await etoro.validateIdToken(tokens.idToken);
+    accountId = await etoro.validateIdToken(tokens.idToken, expectedNonce);
   } catch (err) {
     console.warn(`[flow A] sign-in failed: ${describeError(err)}`);
     return sendMessage(res, 401, 'Sign-in could not finish', 'eToro did not complete the sign-in. Start again.');
