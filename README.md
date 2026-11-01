@@ -90,7 +90,7 @@ Open <http://localhost:3000> and click **Sign in with eToro**. That is flow A. O
 
 Linking the eToro account at the end of flow B, and flow C, need the partner setup listed in [What you need from eToro first](#what-you-need-from-etoro-first). Until then flow B signs you in and skips the link, and the connected page names the settings still needed. The startup log lists the same names, never the values.
 
-The client id that ships in `src/config.js` belongs to eToro's own demo application. Only eToro's test account can sign in to it, and its client secret is not published.
+The client id that ships in `src/config.js` belongs to eToro's own demo application. Any eToro account can sign in to it, but its client secret is not published, so to run the demo yourself you register your own application as above.
 
 eToro must have registered your callback URLs. Outside your own machine they must be HTTPS. Put the demo behind an HTTPS address you control, for example a reverse proxy or a tunnel to port 3000, register that address with eToro, put it in `src/config.js`, and restart with `docker compose up --build`. The cookies get the `Secure` flag when the request arrives over HTTPS.
 

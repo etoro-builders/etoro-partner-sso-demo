@@ -42,8 +42,8 @@ const HOSTS = Object.freeze({
   ETORO_PARTNER_LOGIN_TOKEN_URL: 'https://www.etoro.com/api/sso/v2/silent-login/partner-login-token',
 });
 
-// YOUR APPLICATION. These values belong to eToro's demo application on production, which only
-// eToro's test account can sign in to. Replace them with your own application's values.
+// YOUR APPLICATION. These values belong to eToro's demo application on production. Its client
+// secret is not published, so replace them with your own application's values.
 // None of them is secret. Keep them in your normal configuration, per environment.
 const APPLICATION = Object.freeze({
   // Application id (client_id). Identifies your product to eToro. Given by eToro in writing.
