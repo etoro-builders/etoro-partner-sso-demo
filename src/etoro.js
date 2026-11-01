@@ -98,13 +98,14 @@ function toTokenSet(callName, body, { expectIdToken }) {
  *
  * Only scope=openid is requested. The demo adds no scope and asks for no new consent.
  */
-export function buildAuthorizeUrl({ state, codeChallenge }) {
+export function buildAuthorizeUrl({ state, nonce, codeChallenge }) {
   const url = new URL(config.authorizeUrl); // ends in /sso/, checked in config.js
   url.searchParams.set('client_id', config.clientId);
   url.searchParams.set('redirect_uri', config.redirectUri);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', 'openid');
   url.searchParams.set('state', state);
+  url.searchParams.set('nonce', nonce);
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
   return url.toString();
@@ -150,7 +151,7 @@ function jwks() {
  * Returns `sub`: who signed in. Use it as the key for your own account record.
  * It is not externalUserId. That value comes from sub-account create in flow B.
  */
-export async function validateIdToken(idToken) {
+export async function validateIdToken(idToken, expectedNonce) {
   const { payload } = await jwtVerify(idToken, jwks(), {
     issuer: config.issuer,
     audience: config.clientId,
@@ -164,6 +165,11 @@ export async function validateIdToken(idToken) {
   }
   if (typeof payload.sub !== 'string' || payload.sub === '') {
     throw new Error('id_token has no sub');
+  }
+  // The nonce must be the one this browser was sent with. Without this check an id_token
+  // from another sign-in could be replayed into this one.
+  if (typeof expectedNonce !== 'string' || expectedNonce === '' || payload.nonce !== expectedNonce) {
+    throw new Error('id_token nonce does not match this sign-in');
   }
   return payload.sub;
 }

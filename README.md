@@ -21,10 +21,10 @@ There are three flows. They all use **one application** that eToro registers for
 | Route | Flow | What happens |
 |---|---|---|
 | `GET /` | A | Your site. The customer clicks **Sign in with eToro**. |
-| `GET /api/auth/login` | A | The server creates `state` and a PKCE pair, keeps them in HttpOnly cookies, and sends the browser to eToro. |
+| `GET /api/auth/login` | A | The server creates `state`, a `nonce`, and a PKCE pair, keeps them in HttpOnly cookies, and sends the browser to eToro. |
 | `GET /from-etoro` | B | Your landing URL. eToro opens it after the customer clicks the button for your product inside eToro. The customer clicks **Continue with eToro**. |
 | `GET /api/auth/from-etoro` | B | Same as `/api/auth/login`, and remembers that this sign-in came from eToro. |
-| `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token`, and opens a session. For flow B it then gets the user key and links the sub-account: it reuses the customer's existing sub-account with your provider, and creates one only when there is none. Without the partner setup it skips those steps and says so. |
+| `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token` and its `nonce`, and opens a session. For flow B it then gets the user key and links the sub-account: it reuses the customer's existing sub-account with your provider, and creates one only when there is none. Without the partner setup it skips those steps and says so. |
 | `GET /connected` | A and B | Says the eToro account is connected. Shows status words only, never an id or a token. |
 | `GET /api/auth/open-etoro` | C | Sends the browser to the eToro initiate page with your `client_id`, your flow C callback URL, and a new `state`. |
 | `GET /api/auth/silent-login/callback` | C | eToro sends the browser back with `tid` and `state`. The server gets a machine token, asks eToro for the one-time link, and sends the browser to the `redirectUrl` eToro returned. |
@@ -164,7 +164,7 @@ docker-compose.yml  The whole runtime
 public/demo.css     The partner site's look
 public/icon.svg     An application icon you can register for the consent screen
 src/config.js       Every setting, where each belongs, and the names of what is missing
-src/pkce.js         state, code_verifier, and code_challenge
+src/pkce.js         state, nonce, code_verifier, and code_challenge
 src/etoro.js        Every call to eToro, one function each
 src/session.js      In-memory sessions, refresh, and revoke
 src/pages.js        The HTML pages

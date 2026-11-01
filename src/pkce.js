@@ -28,3 +28,12 @@ export function generateCodeChallenge(codeVerifier) {
 export function generateState() {
   return randomBytes(16).toString('hex');
 }
+
+/**
+ * 128 random bits, one per sign-in attempt. eToro echoes it in the id_token's nonce claim,
+ * and the callback rejects an id_token whose nonce differs. This stops an id_token from
+ * another sign-in being replayed into this one.
+ */
+export function generateNonce() {
+  return randomBytes(16).toString('hex');
+}
