@@ -268,11 +268,16 @@ export async function findSubAccount(userKey) {
  * Authorization: Bearer on this request: use the two keys, or a bearer token, never both.
  * The call must come from one of the public IP addresses you registered with eToro.
  *
+ * The create response does not contain externalUserId. After a 201 or a 409, read it
+ * with findSubAccount.
+ *
  * Outcomes, from the brief:
- * - 201: the link is stored. Keep account.externalUserId for every later call.
+ * - 201: the sub-account is created.
  * - 202: eToro is still processing. The link is not stored yet.
- * - 409: the link already exists, for example from a second sign-in at the same moment.
- *   Read it with findSubAccount. Never create another one.
+ * - 409: the sub-account already exists, for example from a second sign-in at the same
+ *   moment. Never create another one.
+ *
+ * @returns {Promise<'created' | 'processing' | 'exists'>}
  */
 export async function createSubAccount(userKey) {
   const response = await send(config.subAccountsUrl, {
@@ -285,16 +290,11 @@ export async function createSubAccount(userKey) {
     },
     body: JSON.stringify({ providerName: config.providerName, additionalParams: {} }),
   });
-  const body = await readJson(response);
-  if (response.status === 201) {
-    const externalUserId = body?.account?.externalUserId;
-    if (typeof externalUserId !== 'string' || externalUserId === '') {
-      throw new Error('sub-account create returned 201 without account.externalUserId');
-    }
-    return { outcome: 'linked', externalUserId };
-  }
-  if (response.status === 202) return { outcome: 'processing' };
-  if (response.status === 409) return { outcome: 'exists' };
+  // Read the body so the connection is released; nothing in it is needed.
+  await readJson(response);
+  if (response.status === 201) return 'created';
+  if (response.status === 202) return 'processing';
+  if (response.status === 409) return 'exists';
   throw new EtoroCallError('sub-account create', response.status);
 }
 

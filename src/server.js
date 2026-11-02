@@ -77,6 +77,8 @@ function currentSession(req) {
 // token, a secret, a user key, externalUserId, or customer details.
 function describeError(err) {
   if (err instanceof etoro.EtoroCallError) return err.message;
+  // A plain Error is one this demo threw, and its message names the response it rejected.
+  if (err?.name === 'Error' && err.message) return err.message;
   return err?.code ?? err?.name ?? 'error';
 }
 
@@ -264,22 +266,21 @@ async function linkAccount(session, customerAccessToken) {
     }
     if (!account.externalUserId) {
       // One sub-account per customer: reuse the one eToro already has, and create only
-      // when there is none. A 409 means another sign-in created it first, so read it back.
+      // when there is none. The create response has no externalUserId, so after a 201,
+      // or a 409 from another sign-in that created it first, read it from the list.
       const existing = await etoro.findSubAccount(account.userKey);
       if (existing) {
         account.externalUserId = existing.externalUserId;
       } else {
-        const result = await etoro.createSubAccount(account.userKey);
-        if (result.outcome === 'linked') {
-          account.externalUserId = result.externalUserId;
-        } else if (result.outcome === 'processing') {
+        const outcome = await etoro.createSubAccount(account.userKey);
+        if (outcome === 'processing') {
           session.notice = 'eToro is still processing your sub-account. The link is not stored yet. Use Continue with eToro again later.';
         } else {
           const created = await etoro.findSubAccount(account.userKey);
           if (created) {
             account.externalUserId = created.externalUserId;
           } else {
-            session.notice = 'eToro says your sub-account exists but has not returned it yet. Use Continue with eToro again later.';
+            session.notice = 'eToro created your sub-account but has not returned it yet. Use Continue with eToro again later.';
           }
         }
       }
