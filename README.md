@@ -140,6 +140,7 @@ The browser holds only this site's session cookie. The tokens, the user key, and
 - The demo refreshes each access token about a minute before it expires. It stores the new refresh token, then revokes the old one. A refresh that fails with `invalid_grant` ends the session. With more than one instance, only one may refresh a session at a time.
 - There is one demo customer account per eToro `sub`, so signing out and in again keeps the sub-account link.
 - Each customer gets one sub-account with your provider. Before it creates one, the demo asks eToro for the customer's sub-accounts (`GET` on the same address) and reuses the `externalUserId` of the existing one. So a restart, a second device, or a lost record never creates a second sub-account.
+- The create response does not include `externalUserId`. After a `201`, the demo sends the same `GET` again and takes `externalUserId` from the account with your provider name.
 
 ## Errors you are most likely to see
 
