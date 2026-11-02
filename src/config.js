@@ -40,6 +40,7 @@ const HOSTS = Object.freeze({
   ETORO_ISSUER: 'https://www.etoro.com',
   ETORO_SUB_ACCOUNTS_URL: 'https://public-api.etoro.com/api/v1/sub-accounts/me/accounts',
   ETORO_PARTNER_LOGIN_TOKEN_URL: 'https://www.etoro.com/api/sso/v2/silent-login/partner-login-token',
+  ETORO_INITIATE_PAGE_URL: 'https://www.etoro.com/accounts/partners/silent-login/initiate',
 });
 
 // YOUR APPLICATION. These values belong to eToro's demo application on production. Its client
@@ -65,9 +66,6 @@ const APPLICATION = Object.freeze({
   // Flow B: the provider name eToro agreed with you for sub-account create.
   ETORO_PROVIDER_NAME: '',
 
-  // Flow C: the eToro initiate page address eToro gave you for this environment, in writing.
-  ETORO_INITIATE_PAGE_URL: '',
-
   // Optional: only if you agreed with eToro to report events. The partner-events call address
   // eToro gave you in writing, and the event type you agreed on.
   ETORO_PARTNER_EVENTS_URL: '',
@@ -82,7 +80,6 @@ const URL_SETTINGS = new Set([
   'ETORO_REDIRECT_URI',
   'ETORO_FLOW_C_REDIRECT_URI',
   'ETORO_USER_KEY_URL',
-  'ETORO_INITIATE_PAGE_URL',
   'ETORO_PARTNER_EVENTS_URL',
 ]);
 
@@ -96,8 +93,8 @@ const REQUIRED_BY_JOURNEY = Object.freeze({
   // Flow B, after the sign-in: the user key and the sub-account. eToro sets these up for a
   // partner. Without them, flow B still signs the customer in and skips the link.
   linkAccount: ['ETORO_USER_KEY_URL', 'ETORO_APP_KEY', 'ETORO_PROVIDER_NAME'],
-  // Flow C: the eToro initiate page, the flow C callback, and the machine token.
-  openEtoro: ['ETORO_CLIENT_ID', 'ETORO_CLIENT_SECRET', 'ETORO_FLOW_C_REDIRECT_URI', 'ETORO_INITIATE_PAGE_URL'],
+  // Flow C: the flow C callback and the machine token. The initiate page is one of the hosts.
+  openEtoro: ['ETORO_CLIENT_ID', 'ETORO_CLIENT_SECRET', 'ETORO_FLOW_C_REDIRECT_URI'],
   // Optional partner events, only after flow B has stored the link.
   partnerEvent: ['ETORO_PARTNER_EVENTS_URL', 'ETORO_EVENT_TYPE'],
 });
@@ -172,7 +169,6 @@ export const config = Object.freeze({
   flowCRedirectUri: SETTINGS.ETORO_FLOW_C_REDIRECT_URI,
   userKeyUrl: SETTINGS.ETORO_USER_KEY_URL,
   providerName: SETTINGS.ETORO_PROVIDER_NAME,
-  initiatePageUrl: SETTINGS.ETORO_INITIATE_PAGE_URL,
   partnerEventsUrl: SETTINGS.ETORO_PARTNER_EVENTS_URL,
   eventType: SETTINGS.ETORO_EVENT_TYPE,
 
@@ -183,4 +179,5 @@ export const config = Object.freeze({
   issuer: HOSTS.ETORO_ISSUER,
   subAccountsUrl: HOSTS.ETORO_SUB_ACCOUNTS_URL,
   partnerLoginTokenUrl: HOSTS.ETORO_PARTNER_LOGIN_TOKEN_URL,
+  initiatePageUrl: HOSTS.ETORO_INITIATE_PAGE_URL,
 });

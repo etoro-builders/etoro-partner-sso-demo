@@ -326,11 +326,14 @@ export async function sendPartnerEvent(externalUserId) {
  * Flow C, step 1: the eToro initiate page address the browser is sent to. Not a server
  * call. eToro's page places a short-lived cookie in the browser, then sends the browser
  * to our flow C callback with tid and state.
+ *
+ * The page reads only these three names, in snake case like the login link. The names
+ * fromClientId and redirectUri belong to the call the page makes, not to the page.
  */
 export function buildInitiatePageUrl({ state }) {
   const url = new URL(config.initiatePageUrl);
-  url.searchParams.set('fromClientId', config.clientId);
-  url.searchParams.set('redirectUri', config.flowCRedirectUri);
+  url.searchParams.set('client_id', config.clientId);
+  url.searchParams.set('redirect_uri', config.flowCRedirectUri);
   url.searchParams.set('state', state);
   return url.toString();
 }

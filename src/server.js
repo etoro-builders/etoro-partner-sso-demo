@@ -323,6 +323,10 @@ app.get('/api/auth/open-etoro', (req, res) => {
 // Flow C, steps 2 to 5. eToro sends the browser here with tid and state. Register this
 // absolute URL with eToro, exactly as ETORO_FLOW_C_REDIRECT_URI.
 //
+// Why state is checked first: it proves this browser started Open eToro on this site.
+// Without the check, another site could send the browser here and make this server ask
+// eToro for a sign-in link the customer never asked for.
+//
 // This route makes exactly two server calls, a machine token and partner-login-token,
 // then sends the browser to the redirectUrl eToro returns. It never calls verify: verify
 // runs on eToro's page, with the cookie that only the customer's browser holds.

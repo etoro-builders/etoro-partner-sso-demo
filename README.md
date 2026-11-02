@@ -26,8 +26,8 @@ There are three flows. They all use **one application** that eToro registers for
 | `GET /api/auth/from-etoro` | B | Same as `/api/auth/login`, and remembers that this sign-in came from eToro. |
 | `GET /api/auth/callback` | A and B | eToro sends the browser back with `code` and `state`. The server checks `state`, exchanges the code, checks the `id_token` and its `nonce`, and opens a session. For flow B it then gets the user key and links the sub-account: it reuses the customer's existing sub-account with your provider, and creates one only when there is none. Without the partner setup it skips those steps and says so. |
 | `GET /connected` | A and B | Says the eToro account is connected. Shows status words only, never an id or a token. |
-| `GET /api/auth/open-etoro` | C | Sends the browser to the eToro initiate page with your `client_id`, your flow C callback URL, and a new `state`. |
-| `GET /api/auth/silent-login/callback` | C | eToro sends the browser back with `tid` and `state`. The server gets a machine token, asks eToro for the one-time link, and sends the browser to the `redirectUrl` eToro returned. |
+| `GET /api/auth/open-etoro` | C | Sends the browser to eToro's initiate page, `https://www.etoro.com/accounts/partners/silent-login/initiate`, with `client_id`, `redirect_uri` (your flow C callback URL), and a new `state`. |
+| `GET /api/auth/silent-login/callback` | C | eToro sends the browser back with `tid` and the same `state`. The server checks `state`, gets a machine token, asks eToro for the one-time link, and sends the browser to the `redirectUrl` eToro returned. |
 | `POST /api/partner-event` | Optional | Reports one event, only after the sub-account link is saved. |
 | `GET /api/auth/logout` | A and B | Revokes the current refresh token and ends the session. |
 
@@ -45,7 +45,6 @@ Every sign-in control is a normal link. The browser follows the redirects to eTo
 | Environment hosts | The addresses for testing and for production. | In writing. | `ETORO_*_URL`, `ETORO_ISSUER` |
 | The user-key call address | Where your server turns a customer's access token into a user key (flow B). | In writing. | `ETORO_USER_KEY_URL` |
 | The provider name | The name your server sends when it creates the sub-account (flow B). | In writing. | `ETORO_PROVIDER_NAME` |
-| The initiate page address | Where flow C starts. | In writing. | `ETORO_INITIATE_PAGE_URL` |
 | The partner-events call address | Only if you report events. | In writing. | `ETORO_PARTNER_EVENTS_URL`, `ETORO_EVENT_TYPE` |
 
 The demo never guesses an address. If a value a journey needs is empty, that journey's page names the missing settings and stops.
@@ -109,7 +108,6 @@ Every setting is written in one file, [`src/config.js`](src/config.js), next to 
 | `ETORO_APP_KEY` | B | Vault | Not in code. See [Secrets](#secrets). |
 | `ETORO_PROVIDER_NAME` | B | Normal configuration | Empty |
 | `ETORO_FLOW_C_REDIRECT_URI` | C | Normal configuration | `http://localhost:3000/api/auth/silent-login/callback` |
-| `ETORO_INITIATE_PAGE_URL` | C | Normal configuration | Empty |
 | `ETORO_PARTNER_EVENTS_URL` | Events | Normal configuration | Empty. Optional. |
 | `ETORO_EVENT_TYPE` | Events | Normal configuration | Empty. Optional. |
 | `ETORO_AUTHORIZE_URL` | Hosts | Normal configuration | `https://www.etoro.com/sso/`. Must end in `/sso/`. |
@@ -119,8 +117,9 @@ Every setting is written in one file, [`src/config.js`](src/config.js), next to 
 | `ETORO_ISSUER` | Hosts | Normal configuration | `https://www.etoro.com` |
 | `ETORO_SUB_ACCOUNTS_URL` | Hosts | Normal configuration | `https://public-api.etoro.com/api/v1/sub-accounts/me/accounts` |
 | `ETORO_PARTNER_LOGIN_TOKEN_URL` | Hosts | Normal configuration | `https://www.etoro.com/api/sso/v2/silent-login/partner-login-token` |
+| `ETORO_INITIATE_PAGE_URL` | Hosts | Normal configuration | `https://www.etoro.com/accounts/partners/silent-login/initiate`. The same page for every partner. |
 
-The callbacks, user-key address, provider name, initiate page, and hosts are all per environment. Your callbacks must match what you registered with eToro, character for character.
+The callbacks, user-key address, provider name, and hosts are all per environment. Your callbacks must match what you registered with eToro, character for character.
 
 ### One environment at a time
 
@@ -151,7 +150,8 @@ The browser holds only this site's session cookie. The tokens, the user key, and
 | Any call with a user key | `403` | The call came from an IP address eToro does not have for you. |
 | Sub-account create | `409` | The link already exists, for example from a second sign-in at the same moment. Read it back with `GET` and use its `externalUserId`. Never create another one. |
 | Flow C partner-login-token | `400` | The `externalUserId` does not belong to your application. Use the value from flow B. |
-| Flow C callback URL | `403` | The callback URL does not match what you registered. |
+| Flow C, eToro's initiate page | An error page on eToro. The customer does not come back. | The page did not accept the link. Send exactly `client_id`, `redirect_uri`, and `state`, and register `redirect_uri` for your application, character for character. |
+| Flow C callback | "The response does not match the request this browser started" | `state` is missing or different. Start Open eToro again in the same browser. |
 
 The server log shows the call name, the HTTP status, and the OAuth error code. It never shows a token, a key, or customer details. The customer sees a short generic message.
 
