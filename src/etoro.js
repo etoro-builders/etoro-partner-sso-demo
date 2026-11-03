@@ -50,8 +50,7 @@ export class EtoroCallError extends Error {
   }
 }
 
-async function readJson(response) {
-  const text = await response.text();
+function parseJson(text) {
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -60,10 +59,21 @@ async function readJson(response) {
   }
 }
 
+async function readJson(response) {
+  return parseJson(await response.text());
+}
+
 async function expectOk(callName, response) {
-  const body = await readJson(response);
+  const text = await response.text();
+  const body = parseJson(text);
   if (!response.ok) {
     const oauthError = typeof body?.error === 'string' ? body.error : undefined;
+    // Temporary diagnostic: a 5xx is eToro's own infra failing, so the body is a gateway
+    // error page or similar, never customer data. Logging a short snippet helps tell a
+    // real upstream outage apart from a request we built wrong.
+    if (response.status >= 500 && text) {
+      console.warn(`[market] ${callName} ${response.status} body: ${text.slice(0, 300).replace(/\s+/g, ' ')}`);
+    }
     throw new EtoroCallError(callName, response.status, oauthError);
   }
   return body;
@@ -396,4 +406,580 @@ export async function mintPartnerLoginToken({ machineToken, tid, externalUserId 
     throw new Error('partner-login-token returned no usable https redirectUrl');
   }
   return redirectUrl;
+}
+
+// --- After sign-in: the partner's own view of the real account -------------------------
+
+/**
+ * The real portfolio, for the connected page. One read, with the user key saved in flow B
+ * and the application key. The browser never calls this.
+ *
+ * Returns a small summary: available cash, open profit and loss, up to five positions,
+ * up to five pending orders, and up to four copy relationships. A 401 or 403 is a result,
+ * not a failure of sign-in: the application is not allowed to read the real account.
+ * Names that cannot be resolved stay as "Instrument" plus the id. Customer ids are not
+ * copied into the summary.
+ *
+ * @param {string} userKey
+ * @returns {Promise<{ status: 'ok', credit: number | null, pnl: number | null, openCount: number,
+ *   positions: { name: string, side: string, pnl: number | null }[],
+ *   orders: { name: string, side: string, amount: number | null, leverage: number | null, kind: string }[],
+ *   copies: { name: string, invested: number | null, closedPnl: number | null, paused: boolean }[]
+ * } | { status: 'forbidden' }>}
+ */
+export async function readRealPortfolio(userKey) {
+  const headers = {
+    'x-request-id': randomUUID(),
+    'x-api-key': config.appKey,
+    'x-user-key': userKey,
+  };
+  const url = new URL('/api/v1/trading/info/real/pnl', config.subAccountsUrl);
+  const response = await send(url, { method: 'GET', headers });
+  if (response.status === 401 || response.status === 403) {
+    await readJson(response);
+    console.warn(`[portfolio] portfolio failed with status ${response.status}`);
+    return { status: 'forbidden' };
+  }
+  const body = await expectOk('portfolio', response);
+  const portfolio = body?.clientPortfolio ?? {};
+  const listed = listedPositions(portfolio)
+    .map((position) => ({
+      instrumentId: position.instrumentID,
+      side: `${position.isCopy ? 'Copy · ' : ''}${position.isBuy === false ? 'Sell' : 'Buy'}`,
+      pnl: typeof position.unrealizedPnL?.pnL === 'number' ? position.unrealizedPnL.pnL : null,
+    }))
+    .filter((position) => Number.isInteger(position.instrumentId))
+    .sort((a, b) => Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0));
+  const shown = listed.slice(0, 5);
+  const orders = listedOrders(portfolio);
+  const names = await instrumentNames(
+    [...shown.map((position) => position.instrumentId), ...orders.map((order) => order.instrumentId)],
+    headers,
+  );
+  const nameOf = (instrumentId) => names.get(instrumentId) ?? `Instrument ${instrumentId}`;
+  return {
+    status: 'ok',
+    credit: typeof portfolio.credit === 'number' ? portfolio.credit : null,
+    pnl: typeof portfolio.unrealizedPnL === 'number' ? portfolio.unrealizedPnL : null,
+    openCount: listed.length,
+    positions: shown.map((position) => ({
+      name: nameOf(position.instrumentId),
+      side: position.side,
+      pnl: position.pnl,
+    })),
+    orders: orders.map((order) => ({
+      name: nameOf(order.instrumentId),
+      side: order.side,
+      amount: order.amount,
+      leverage: order.leverage,
+      kind: order.kind,
+    })),
+    copies: listedCopies(portfolio),
+    held: heldInstruments(listed),
+  };
+}
+
+function heldInstruments(listed) {
+  const byId = new Map();
+  for (const position of listed) {
+    const current = byId.get(position.instrumentId);
+    if (!current || Math.abs(position.pnl ?? 0) > Math.abs(current.pnl ?? 0)) {
+      byId.set(position.instrumentId, {
+        id: position.instrumentId,
+        pnl: position.pnl,
+        side: typeof position.side === 'string' ? position.side : '',
+      });
+    }
+  }
+  return [...byId.values()];
+}
+
+function listedOrders(portfolio) {
+  const rows = [];
+  const take = (list, kind) => {
+    for (const order of Array.isArray(list) ? list : []) {
+      const instrumentId = order?.instrumentId ?? order?.instrumentID;
+      if (!Number.isInteger(instrumentId)) continue;
+      rows.push({
+        instrumentId,
+        side: order.isBuy === false ? 'Sell' : 'Buy',
+        amount: typeof order.amount === 'number' ? order.amount : null,
+        leverage: Number.isInteger(order.leverage) ? order.leverage : null,
+        kind,
+      });
+    }
+  };
+  take(portfolio.orders, 'Limit');
+  take(portfolio.ordersForOpen, 'Opening');
+  return rows.slice(0, 5);
+}
+
+function listedCopies(portfolio) {
+  const mirrors = Array.isArray(portfolio.mirrors) ? portfolio.mirrors : [];
+  return mirrors.slice(0, 4).map((mirror) => ({
+    name: typeof mirror?.parentUsername === 'string' && mirror.parentUsername !== ''
+      ? mirror.parentUsername
+      : 'Trader',
+    invested: typeof mirror?.initialInvestment === 'number' ? mirror.initialInvestment : null,
+    closedPnl: typeof mirror?.closedPositionsNetProfit === 'number' ? mirror.closedPositionsNetProfit : null,
+    paused: mirror?.isPaused === true,
+  }));
+}
+
+function listedPositions(portfolio) {
+  const own = Array.isArray(portfolio.positions) ? portfolio.positions : [];
+  const copied = (Array.isArray(portfolio.mirrors) ? portfolio.mirrors : []).flatMap((mirror) =>
+    (Array.isArray(mirror?.positions) ? mirror.positions : []).map((position) => ({
+      ...position,
+      isCopy: true,
+    })),
+  );
+  return [...own, ...copied];
+}
+
+async function instrumentNames(ids, headers) {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  const url = new URL('/api/v1/market-data/instruments', config.subAccountsUrl);
+  url.searchParams.set('instrumentIds', unique.join(','));
+  try {
+    const response = await send(url, {
+      method: 'GET',
+      headers: { ...headers, 'x-request-id': randomUUID() },
+    });
+    const body = await expectOk('instruments', response);
+    const items = Array.isArray(body?.instrumentDisplayDatas) ? body.instrumentDisplayDatas : [];
+    const names = new Map();
+    for (const item of items) {
+      const name = item?.instrumentDisplayName || item?.symbolFull;
+      if (Number.isInteger(item?.instrumentID) && typeof name === 'string' && name !== '') {
+        names.set(item.instrumentID, name);
+      }
+    }
+    return names;
+  } catch (err) {
+    console.warn(`[portfolio] instrument names: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+    return new Map();
+  }
+}
+
+// --- The Edge-style board: watchlist, chart, quote. No orders are sent. ---------------
+
+const FALLBACK_QUERIES = ['AAPL', 'BTC', 'ETH', 'TSLA', 'SPX500', 'EURUSD', 'GOLD', 'NVDA'];
+
+function marketHeaders(userKey) {
+  return {
+    'x-request-id': randomUUID(),
+    'x-api-key': config.appKey,
+    'x-user-key': userKey,
+  };
+}
+
+async function marketGet(userKey, url, callName) {
+  const response = await send(url, { method: 'GET', headers: marketHeaders(userKey) });
+  return expectOk(callName, response);
+}
+
+/**
+ * Watchlist, prices, and an hourly chart for the connected page.
+ * A missing watchlist falls back to a short list of markets. A 401 or 403 from every
+ * source is `forbidden`. Customer ids are not copied out.
+ *
+ * @param {string} userKey
+ * @param {number | undefined} selectedId
+ */
+export async function readMarketBoard(userKey, selectedId) {
+  let blocked = false;
+  let throttled = false;
+  const noteBlock = (err) => {
+    if (err instanceof EtoroCallError && (err.status === 401 || err.status === 403)) blocked = true;
+    if (err instanceof EtoroCallError && err.status === 429) throttled = true;
+  };
+
+  let instruments = [];
+  let source = 'Markets';
+  try {
+    instruments = await loadWatchlist(userKey);
+    if (instruments.length) source = 'My watchlist';
+  } catch (err) {
+    noteBlock(err);
+    console.warn(`[market] watchlist: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+  }
+  if (!instruments.length) {
+    try {
+      instruments = await loadFallbackMarkets(userKey);
+    } catch (err) {
+      noteBlock(err);
+      console.warn(`[market] search: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+    }
+  }
+  if (!instruments.length) return { status: blocked ? 'forbidden' : 'unavailable' };
+
+  instruments = instruments.slice(0, 10);
+  const ids = instruments.map((item) => item.id);
+  const selected = ids.includes(selectedId) ? selectedId : ids[0];
+
+  const [rates, candles, dailyChanges] = await Promise.all([
+    loadRates(userKey, ids).catch((err) => {
+      noteBlock(err);
+      console.warn(`[market] rates: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+      return new Map();
+    }),
+    loadCandles(userKey, selected, 'OneHour', 48).catch((err) => {
+      noteBlock(err);
+      console.warn(`[market] candles: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+      return [];
+    }),
+    loadDayChangeFallback(userKey, ids).catch((err) => {
+      noteBlock(err);
+      console.warn(`[market] day change: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+      return new Map();
+    }),
+  ]);
+
+  if (blocked && rates.size === 0 && candles.length === 0) return { status: 'forbidden' };
+
+  // Daily candles are the primary day-change source. The bulk closing-price call is only
+  // used when those candles come back empty, because that history route is returning 502
+  // from eToro's own gateway on staging.
+  const closes = dailyChanges.size === 0
+    ? await loadPreviousCloses(userKey).catch((err) => {
+      noteBlock(err);
+      console.warn(`[market] closing prices: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+      return new Map();
+    })
+    : new Map();
+
+  const items = instruments.map((item) => {
+    const rate = rates.get(item.id);
+    const price = rate?.bid ?? rate?.ask;
+    return {
+      id: item.id,
+      symbol: item.symbol,
+      name: item.name,
+      bid: rate?.bid ?? null,
+      ask: rate?.ask ?? null,
+      changePct: dailyChanges.get(item.id) ?? dayChange(closes.get(item.id), price) ?? null,
+    };
+  });
+  return {
+    status: 'ok',
+    throttled,
+    source,
+    selectedId: selected,
+    items,
+    candles,
+    quote: items.find((item) => item.id === selected) ?? items[0],
+  };
+}
+
+/**
+ * One market, so choosing a symbol updates the chart without rebuilding the page.
+ * A 401 or 403 is `forbidden`. Customer ids are not copied out.
+ * @param {string} userKey
+ * @param {number} instrumentId
+ */
+export async function readInstrumentQuote(userKey, instrumentId) {
+  try {
+    const [briefs, rates, candles, closes] = await Promise.all([
+      instrumentBriefs(userKey, [instrumentId]).catch(() => new Map()),
+      loadRates(userKey, [instrumentId]),
+      loadCandles(userKey, instrumentId, 'OneHour', 48).catch((err) => {
+        if (err instanceof EtoroCallError && (err.status === 401 || err.status === 403)) throw err;
+        return [];
+      }),
+      loadPreviousCloses(userKey).catch(() => new Map()),
+    ]);
+    const brief = briefs.get(instrumentId);
+    const rate = rates.get(instrumentId);
+    return {
+      status: 'ok',
+      id: instrumentId,
+      symbol: brief?.symbol ?? String(instrumentId),
+      name: brief?.name ?? `Instrument ${instrumentId}`,
+      bid: rate?.bid ?? null,
+      ask: rate?.ask ?? null,
+      changePct: dayChange(closes.get(instrumentId), rate?.bid ?? rate?.ask) ?? dayChangeFromHourly(candles),
+      candles,
+    };
+  } catch (err) {
+    if (err instanceof EtoroCallError && (err.status === 401 || err.status === 403)) return { status: 'forbidden' };
+    throw err;
+  }
+}
+
+/**
+ * Tiles for the heatmap: the user's watchlist plus open positions, drawn once.
+ * The fallback market list is not included. Four or fewer instruments draw nothing.
+ * Customer ids are not copied out.
+ * @param {string} userKey
+ * @param {{ id: number, symbol?: string, name?: string, changePct?: number | null }[]} watchItems
+ * @param {{ id: number, pnl?: number | null }[]} held
+ */
+export async function readHeatmap(userKey, watchItems, held) {
+  const byId = new Map();
+  for (const item of Array.isArray(watchItems) ? watchItems : []) {
+    if (!Number.isInteger(item?.id)) continue;
+    byId.set(item.id, {
+      id: item.id,
+      symbol: typeof item.symbol === 'string' ? item.symbol : '',
+      name: typeof item.name === 'string' ? item.name : '',
+      changePct: typeof item.changePct === 'number' ? item.changePct : null,
+      bid: typeof item.bid === 'number' ? item.bid : null,
+      ask: typeof item.ask === 'number' ? item.ask : null,
+      pnl: null,
+      side: '',
+      attempted: true,
+    });
+  }
+  for (const position of Array.isArray(held) ? held : []) {
+    if (!Number.isInteger(position?.id)) continue;
+    const existing = byId.get(position.id);
+    if (existing) {
+      existing.pnl = typeof position.pnl === 'number' ? position.pnl : null;
+      existing.side = typeof position.side === 'string' ? position.side : '';
+      continue;
+    }
+    byId.set(position.id, {
+      id: position.id,
+      symbol: '',
+      name: '',
+      changePct: null,
+      bid: null,
+      ask: null,
+      pnl: typeof position.pnl === 'number' ? position.pnl : null,
+      side: typeof position.side === 'string' ? position.side : '',
+    });
+  }
+  if (byId.size <= 4) return [];
+
+  let tiles = [...byId.values()];
+  if (tiles.length > 16) {
+    tiles.sort((a, b) => {
+      const named = (tile) => (tile.symbol ? 1 : 0);
+      const rank = named(b) - named(a);
+      if (rank !== 0) return rank;
+      return Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0);
+    });
+    tiles = tiles.slice(0, 16);
+  }
+
+  // Watchlist tiles were already asked for in readMarketBoard. Asking again only doubles
+  // the calls that eToro throttles, so only positions outside the watchlist are fetched.
+  const needChange = tiles.filter((tile) => !tile.attempted && tile.changePct == null).map((tile) => tile.id);
+  const needName = tiles.filter((tile) => tile.symbol === '').map((tile) => tile.id);
+  const needRate = tiles.filter((tile) => !tile.attempted && tile.bid == null && tile.ask == null).map((tile) => tile.id);
+  const [briefs, rates, fallbackChanges] = await Promise.all([
+    needName.length ? instrumentBriefs(userKey, needName).catch(() => new Map()) : Promise.resolve(new Map()),
+    needRate.length ? loadRates(userKey, needRate).catch(() => new Map()) : Promise.resolve(new Map()),
+    needChange.length ? loadDayChangeFallback(userKey, needChange).catch(() => new Map()) : Promise.resolve(new Map()),
+  ]);
+
+  const stillMissing = needChange.filter((id) => !fallbackChanges.has(id));
+  const closes = stillMissing.length
+    ? await loadPreviousCloses(userKey).catch(() => new Map())
+    : new Map();
+
+  const drawn = [];
+  for (const tile of tiles) {
+    const brief = briefs.get(tile.id);
+    const rate = rates.get(tile.id);
+    const price = tile.bid ?? tile.ask ?? rate?.bid ?? rate?.ask;
+    const changePct = tile.changePct ?? dayChange(closes.get(tile.id), price) ?? fallbackChanges.get(tile.id) ?? null;
+    if (typeof changePct !== 'number') continue;
+    drawn.push({
+      id: tile.id,
+      symbol: tile.symbol || brief?.symbol || String(tile.id),
+      name: tile.name || brief?.name || `Instrument ${tile.id}`,
+      changePct,
+      bid: tile.bid ?? rate?.bid ?? null,
+      ask: tile.ask ?? rate?.ask ?? null,
+      pnl: typeof tile.pnl === 'number' ? tile.pnl : null,
+      side: typeof tile.side === 'string' ? tile.side : '',
+    });
+  }
+  return drawn.length > 4 ? drawn : [];
+}
+
+async function loadWatchlist(userKey) {
+  const url = new URL('/api/v1/watchlists', config.subAccountsUrl);
+  const body = await marketGet(userKey, url, 'watchlists');
+  const lists = Array.isArray(body?.watchlists) ? body.watchlists : [];
+  const list = lists.find((item) => item?.isUserSelectedDefault && item.items?.length)
+    ?? lists.find((item) => Array.isArray(item?.items) && item.items.length);
+  const ids = (list?.items ?? [])
+    .filter((item) => !item?.itemType || item.itemType === 'Instrument')
+    .map((item) => item?.itemId)
+    .filter((id) => Number.isInteger(id))
+    .slice(0, 10);
+  if (!ids.length) return [];
+  const briefs = await instrumentBriefs(userKey, ids);
+  if (!briefs.size && ids.length) {
+    return ids.map((id) => ({ id, symbol: String(id), name: `Instrument ${id}` }));
+  }
+  return ids.map((id) => briefs.get(id) ?? { id, symbol: String(id), name: `Instrument ${id}` });
+}
+
+async function loadFallbackMarkets(userKey) {
+  const found = await Promise.all(FALLBACK_QUERIES.map((query) => searchOne(userKey, query).catch(() => null)));
+  const seen = new Set();
+  const items = [];
+  for (const item of found) {
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    items.push(item);
+  }
+  return items;
+}
+
+async function searchOne(userKey, query) {
+  const url = new URL('/api/v2/market-data/instruments/search', config.subAccountsUrl);
+  url.searchParams.set('query', query);
+  url.searchParams.set('limit', '1');
+  const body = await marketGet(userKey, url, 'search');
+  const item = Array.isArray(body?.results) ? body.results[0] : undefined;
+  if (!Number.isInteger(item?.instrumentId)) return null;
+  const symbol = typeof item.symbol === 'string' && item.symbol !== '' ? item.symbol : query;
+  const name = typeof item.displayName === 'string' && item.displayName !== '' ? item.displayName : symbol;
+  return { id: item.instrumentId, symbol, name };
+}
+
+async function instrumentBriefs(userKey, ids) {
+  const url = new URL('/api/v1/market-data/instruments', config.subAccountsUrl);
+  url.searchParams.set('instrumentIds', [...new Set(ids)].join(','));
+  const body = await marketGet(userKey, url, 'instruments');
+  const rows = Array.isArray(body?.instrumentDisplayDatas) ? body.instrumentDisplayDatas : [];
+  const briefs = new Map();
+  for (const row of rows) {
+    if (!Number.isInteger(row?.instrumentID)) continue;
+    const name = row.instrumentDisplayName || row.symbolFull || `Instrument ${row.instrumentID}`;
+    const symbol = row.symbolFull || name;
+    briefs.set(row.instrumentID, { id: row.instrumentID, symbol, name });
+  }
+  return briefs;
+}
+
+async function loadRates(userKey, ids) {
+  const url = new URL('/api/v1/market-data/instruments/rates', config.subAccountsUrl);
+  url.searchParams.set('instrumentIds', ids.join(','));
+  const body = await marketGet(userKey, url, 'rates');
+  const rates = new Map();
+  for (const rate of Array.isArray(body?.rates) ? body.rates : []) {
+    if (!Number.isInteger(rate?.instrumentID)) continue;
+    rates.set(rate.instrumentID, {
+      bid: typeof rate.bid === 'number' ? rate.bid : null,
+      ask: typeof rate.ask === 'number' ? rate.ask : null,
+    });
+  }
+  return rates;
+}
+
+const DATA_INTERVAL = { OneHour: '1h', OneDay: '1d' };
+
+function asPrice(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function toCandles(points) {
+  return points
+    .map((point) => ({
+      open: asPrice(point?.open),
+      high: asPrice(point?.high),
+      low: asPrice(point?.low),
+      close: asPrice(point?.close),
+    }))
+    .filter((point) => [point.open, point.high, point.low, point.close].every((value) => typeof value === 'number'));
+}
+
+async function loadCandles(userKey, instrumentId, interval, count) {
+  const mapped = DATA_INTERVAL[interval];
+  if (mapped) {
+    try {
+      const url = new URL(`/api/v1/data/instruments/${instrumentId}/candles`, config.subAccountsUrl);
+      url.searchParams.set('interval', mapped);
+      url.searchParams.set('limit', String(count));
+      url.searchParams.set('side', 'bid');
+      const body = await marketGet(userKey, url, 'price candles');
+      const rows = Array.isArray(body?.results) ? body.results : [];
+      const points = toCandles([...rows].reverse());
+      if (points.length) return points;
+    } catch (err) {
+      if (err instanceof EtoroCallError && (err.status === 401 || err.status === 403)) throw err;
+      console.warn(`[market] price candles: ${err instanceof EtoroCallError ? err.message : 'unavailable'}`);
+    }
+  }
+
+  const url = new URL(
+    `/api/v1/market-data/instruments/${instrumentId}/history/candles/asc/${interval}/${count}`,
+    config.subAccountsUrl,
+  );
+  const body = await marketGet(userKey, url, 'candles');
+  const groups = Array.isArray(body?.candles) ? body.candles : [];
+  const points = Array.isArray(groups[0]?.candles) ? groups[0].candles : [];
+  return toCandles(points);
+}
+
+function dayChange(previousClose, price) {
+  if (typeof previousClose !== 'number' || previousClose <= 0) return null;
+  if (typeof price !== 'number' || !Number.isFinite(price)) return null;
+  return ((price - previousClose) / previousClose) * 100;
+}
+
+// Free: the chart already loaded 48 hourly candles (two days). Reuses them instead of an
+// extra call. ~24 candles back approximates the previous close.
+function dayChangeFromHourly(candles) {
+  if (!Array.isArray(candles) || candles.length < 2) return null;
+  const last = candles[candles.length - 1]?.close;
+  if (typeof last !== 'number') return null;
+  const back = Math.max(candles.length - 25, 0);
+  const prior = candles[back]?.close;
+  return dayChange(prior, last);
+}
+
+// Fallback only: one OneDay-candle call per instrument, used solely when the single bulk
+// closing-price call fails outright. Callers cap `ids` (10 for the watchlist, 16 for the
+// heat map) so a flaky bulk endpoint cannot turn back into one call per instrument always.
+async function loadDayChangeFallback(userKey, ids, onError) {
+  const pairs = await Promise.all(ids.map(async (id) => {
+    try {
+      const candles = await loadCandles(userKey, id, 'OneDay', 2);
+      if (candles.length < 2 || !candles[0].close) return [id, null];
+      return [id, dayChange(candles[0].close, candles[candles.length - 1].close)];
+    } catch (err) {
+      if (typeof onError === 'function') onError(err);
+      return [id, null];
+    }
+  }));
+  return new Map(pairs.filter((pair) => typeof pair[1] === 'number'));
+}
+
+// One call returns the previous close for every instrument. Kept briefly so the heat map
+// and a symbol click do not download it again.
+const previousCloseCache = new Map();
+const PREVIOUS_CLOSE_MS = 30_000;
+
+async function loadPreviousCloses(userKey) {
+  const hit = previousCloseCache.get(userKey);
+  if (hit && Date.now() - hit.at < PREVIOUS_CLOSE_MS) return hit.closes;
+  const url = new URL('/api/v1/market-data/instruments/history/closing-price', config.subAccountsUrl);
+  const body = await marketGet(userKey, url, 'closing prices');
+  const rows = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.items)
+      ? body.items
+      : [];
+  const closes = new Map();
+  for (const row of rows) {
+    const id = row?.instrumentId ?? row?.instrumentID;
+    const price = row?.closingPrices?.daily?.price;
+    if (!Number.isInteger(id) || typeof price !== 'number' || price <= 0) continue;
+    closes.set(id, price);
+  }
+  previousCloseCache.set(userKey, { at: Date.now(), closes });
+  return closes;
 }

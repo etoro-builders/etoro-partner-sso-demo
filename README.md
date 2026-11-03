@@ -61,7 +61,7 @@ Replace `YOUR_HOST` with the HTTPS address the demo runs on.
 | The public IPv4 addresses your servers call eToro from | The machine that runs the demo | Every server call with a user key |
 | An icon URL and your product name | Your own | The consent screen |
 
-The demo sends `scope=openid` and needs no other permission. eToro grants the permissions registered for your application, whatever the request asks for, so register as few as you can.
+The demo sends `scope=openid`. eToro grants the permissions registered for your application, whatever the request asks for, so register as few as you can. The portfolio on the connected page needs a real-account read permission. Without it, that panel says the portfolio was not shared and the rest of the demo still works.
 
 When your IP addresses change, send the new list before you switch traffic. Calls from any other address are rejected.
 
@@ -86,6 +86,8 @@ You need Docker with Compose and an eToro account. Nothing else is installed on 
    In Windows PowerShell, use `$env:ETORO_CLIENT_SECRET = '<your client secret>'` instead of `export`.
 
 Open <http://localhost:3000> and click **Sign in with eToro**. That is flow A. Open <http://localhost:3000/from-etoro> and click **Continue with eToro** to try flow B, which signs you in the same way.
+
+After flow B saves a user key, the connected page reads the real portfolio with that key and the application key: available cash, open profit and loss, and up to five open positions. If the application is not allowed to read the real account, the page says so and the rest of the demo still works.
 
 Linking the eToro account at the end of flow B, and flow C, need the partner setup listed in [What you need from eToro first](#what-you-need-from-etoro-first). Until then flow B signs you in and skips the link, and the connected page names the settings still needed. The startup log lists the same names, never the values.
 

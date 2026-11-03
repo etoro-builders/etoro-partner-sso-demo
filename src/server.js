@@ -153,22 +153,196 @@ app.get('/from-etoro', (req, res) => {
   res.send(pages.landingPage());
 });
 
-// Where flows A and B end. It says the account is connected and shows status words only.
-app.get('/connected', (req, res) => {
+// Where flows A and B end. It says the account is connected, and after flow B it reads
+// the real portfolio for the dashboard. A portfolio failure does not sign the customer out.
+// Where flows A and B end. The portfolio, market, and heat map data are not read here:
+// they are slow (real calls to eToro), so holding the response on them made this page
+// feel slow. Instead the shell below sends instantly with a loading placeholder for each
+// panel, and /board.js fetches /api/panel/* to fill them in. The one exception is
+// ?full=1, used only by the <noscript> fallback, which still does the old blocking read
+// so the page works without JavaScript.
+app.get('/connected', async (req, res) => {
   const session = currentSession(req);
   if (!session) return res.send(pages.signedOutPage());
   const account = store.getAccount(session.accountId);
   const notice = session.notice;
   session.notice = undefined;
-  return res.send(
-    pages.connectedPage({
-      hasUserKey: Boolean(account.userKey),
-      hasLink: Boolean(account.externalUserId),
-      canSendEvent: Boolean(account.userKey && account.externalUserId),
-      notice,
-    }),
-  );
+  const ticket = ticketFrom(req);
+  const pageProps = {
+    hasUserKey: Boolean(account.userKey),
+    hasLink: Boolean(account.externalUserId),
+    canSendEvent: Boolean(account.userKey && account.externalUserId),
+    notice,
+    ticket,
+  };
+
+  if (req.query.full === '1') {
+    const portfolio = await cachedFor(session, 'portfolio', () => portfolioFor(account, session));
+    const market = await cachedFor(session, `market:${ticket.selectedId ?? ''}`, () => marketFor(account, session, ticket.selectedId));
+    const heatmap = await cachedFor(session, 'heatmap', () => heatmapFor(account, market, portfolio));
+    return res.send(pages.connectedPage({ ...pageProps, portfolio, market, heatmap, loading: false }));
+  }
+
+  return res.send(pages.connectedPage({ ...pageProps, loading: true }));
 });
+
+// The three slow panels on /connected, each fetched by /board.js after the shell is on
+// screen. Same auth and same session cache as the full render above, so whichever of
+// these or ?full=1 runs first does the real eToro call and the rest reuse it.
+app.get('/api/panel/portfolio', async (req, res) => {
+  const session = currentSession(req);
+  if (!session) return res.status(401).end();
+  const account = store.getAccount(session.accountId);
+  const portfolio = await cachedFor(session, 'portfolio', () => portfolioFor(account, session));
+  return res.json({ portfolio: pages.portfolioSection(portfolio), extras: pages.extraPanels(portfolio) });
+});
+
+app.get('/api/panel/market', async (req, res) => {
+  const session = currentSession(req);
+  if (!session) return res.status(401).end();
+  const account = store.getAccount(session.accountId);
+  const ticket = ticketFrom(req);
+  const market = await cachedFor(session, `market:${ticket.selectedId ?? ''}`, () => marketFor(account, session, ticket.selectedId));
+  return res.type('html').send(pages.edgeSection(market, ticket));
+});
+
+app.get('/api/panel/heatmap', async (req, res) => {
+  const session = currentSession(req);
+  if (!session) return res.status(401).end();
+  const account = store.getAccount(session.accountId);
+  const ticket = ticketFrom(req);
+  const portfolio = await cachedFor(session, 'portfolio', () => portfolioFor(account, session));
+  const market = await cachedFor(session, `market:${ticket.selectedId ?? ''}`, () => marketFor(account, session, ticket.selectedId));
+  const heatmap = await cachedFor(session, 'heatmap', () => heatmapFor(account, market, portfolio));
+  return res.type('html').send(pages.heatmapCard(heatmap));
+});
+
+// Chart for one symbol. The page fetches this instead of navigating, so the portfolio
+// stays where it is. Same session as /connected. The body is prices and candles only.
+app.get('/api/market/instrument', async (req, res) => {
+  const session = currentSession(req);
+  if (!session) return res.status(401).json({ error: 'signed-out' });
+  const account = store.getAccount(session.accountId);
+  const instrumentId = Number(req.query.m);
+  if (!Number.isInteger(instrumentId) || instrumentId <= 0) return res.status(400).json({ error: 'bad-id' });
+  if (!account?.userKey || !config.appKey) return res.status(409).json({ error: 'needs-link' });
+  try {
+    const quote = await etoro.readInstrumentQuote(account.userKey, instrumentId);
+    if (quote.status === 'forbidden') return res.status(403).json({ error: 'forbidden' });
+    if (quote.status !== 'ok') return res.status(502).json({ error: 'unavailable' });
+    return res.json({
+      id: quote.id,
+      symbol: quote.symbol,
+      name: quote.name,
+      bid: quote.bid,
+      ask: quote.ask,
+      changePct: quote.changePct,
+      candles: quote.candles,
+    });
+  } catch (err) {
+    console.warn(`[market] ${describeError(err)}`);
+    return res.status(502).json({ error: 'unavailable' });
+  }
+});
+
+function ticketFrom(req) {
+  const selected = Number(req.query.m);
+  const rawAmount = Number(req.query.amount);
+  const leverage = [1, 2, 5].includes(Number(req.query.lev)) ? Number(req.query.lev) : 1;
+  return {
+    selectedId: Number.isInteger(selected) && selected > 0 ? selected : undefined,
+    side: req.query.side === 'sell' ? 'sell' : 'buy',
+    leverage,
+    amount: Number.isFinite(rawAmount) && rawAmount >= 10 && rawAmount <= 1_000_000 ? rawAmount : 1000,
+    preview: req.query.ticket === 'preview',
+  };
+}
+
+// eToro shares one request budget across the market and portfolio calls. A reload or a
+// hover should not spend it again, so each session keeps its last good result for 30 s.
+const CONNECTED_CACHE_MS = 30_000;
+
+async function cachedFor(session, key, load) {
+  const cache = (session.connectedCache ??= {});
+  const hit = cache[key];
+  // The panel endpoints and the ?full=1 shell can all ask for the same key within the
+  // same page load. Without this, two requests that land before either has finished would
+  // both call eToro for the same data, right after the 429s this cache exists to avoid.
+  if (hit?.promise) return hit.promise;
+  if (hit && Date.now() - hit.at < CONNECTED_CACHE_MS) return hit.value;
+  const promise = load();
+  cache[key] = { promise };
+  try {
+    const value = await promise;
+    if (value?.status === 'ok' || (key === 'heatmap' && Array.isArray(value))) {
+      cache[key] = { at: Date.now(), value };
+    } else {
+      delete cache[key];
+    }
+    return value;
+  } catch (err) {
+    delete cache[key];
+    throw err;
+  }
+}
+
+async function heatmapFor(account, market, portfolio) {
+  if (!account?.userKey) return [];
+  const watchItems = market?.status === 'ok' && market.source === 'My watchlist' ? market.items : [];
+  const held = portfolio?.status === 'ok' ? portfolio.held : [];
+  if (!watchItems.length && !held?.length) return [];
+  try {
+    return await etoro.readHeatmap(account.userKey, watchItems, held);
+  } catch (err) {
+    console.warn(`[market] heatmap: ${describeError(err)}`);
+    return [];
+  }
+}
+
+async function marketFor(account, session, selectedId) {
+  if (!account.userKey || !config.appKey) return { status: 'needs-link' };
+  try {
+    let result = await etoro.readMarketBoard(account.userKey, selectedId);
+    if (result.status === 'forbidden' && session?.accessToken && !session.marketKeyRetried) {
+      session.marketKeyRetried = true;
+      try {
+        account.userKey = await etoro.mintUserKey(session.accessToken);
+        result = await etoro.readMarketBoard(account.userKey, selectedId);
+      } catch (err) {
+        console.warn(`[market] ${describeError(err)}`);
+      }
+    }
+    return result;
+  } catch (err) {
+    console.warn(`[market] ${describeError(err)}`);
+    if (err?.stack) console.warn(`[market] at ${err.stack.split('\n').slice(1, 3).map((line) => line.trim()).join(' | ')}`);
+    return { status: 'unavailable' };
+  }
+}
+
+async function portfolioFor(account, session) {
+  if (!account.userKey) return { status: 'needs-link' };
+  if (!config.appKey) return { status: 'unavailable' };
+  try {
+    let result = await etoro.readRealPortfolio(account.userKey);
+    // A user key keeps the scopes of the access token it was minted from. After the
+    // application gains the portfolio read permission, the key already stored is still
+    // the old one. Mint one new key from this sign-in, then stop.
+    if (result.status === 'forbidden' && session?.accessToken && !session.portfolioKeyRetried) {
+      session.portfolioKeyRetried = true;
+      try {
+        account.userKey = await etoro.mintUserKey(session.accessToken);
+        result = await etoro.readRealPortfolio(account.userKey);
+      } catch (err) {
+        console.warn(`[portfolio] ${describeError(err)}`);
+      }
+    }
+    return result;
+  } catch (err) {
+    console.warn(`[portfolio] ${describeError(err)}`);
+    return { status: 'unavailable' };
+  }
+}
 
 // --- Flow A and flow B: start the sign-in -----------------------------------------------
 
