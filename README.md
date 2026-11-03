@@ -183,6 +183,4 @@ The full partner documentation is on the eToro API portal.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-You may copy this code into your own product, open or closed. Keep the license and the notice with the copied code. The license does not let you use the eToro name or logo, except to say where the code comes from. This is a demo, provided as is, without warranty.
+Copyright 2026 etoro Ltd. Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
