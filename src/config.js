@@ -52,7 +52,10 @@ const HOSTS = Object.freeze({
   ETORO_JWKS_URL: 'https://www.etoro.com/.well-known/jwks.json',
   ETORO_ISSUER: 'https://www.etoro.com',
   ETORO_SUB_ACCOUNTS_URL: 'https://public-api.etoro.com/api/v1/sub-accounts/me/accounts',
-  ETORO_PARTNER_LOGIN_TOKEN_URL: 'https://www.etoro.com/api/sso/v2/silent-login/partner-login-token',
+  // Flow C. On the public API, and the only call here that needs a scope of its own:
+  // etoro-public:partner:silent-login:write, granted to your application by eToro. Without it
+  // the call is refused with 403 before it reaches the sign-in service.
+  ETORO_PARTNER_LOGIN_TOKEN_URL: 'https://public-api.etoro.com/api/v1/silent-login/partner-login-token',
   ETORO_INITIATE_PAGE_URL: 'https://www.etoro.com/accounts/partners/silent-login/initiate',
 });
 
