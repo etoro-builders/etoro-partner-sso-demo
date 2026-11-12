@@ -63,6 +63,8 @@ Replace `YOUR_HOST` with the HTTPS address the demo runs on.
 
 The demo sends `scope=openid`. eToro grants the permissions registered for your application, whatever the request asks for, so register as few as you can. The portfolio on the connected page needs a real-account read permission. Without it, that panel says the portfolio was not shared and the rest of the demo still works.
 
+Flow C needs one permission by name: `etoro-public:partner:silent-login:write`. Ask eToro for it when you ask for your application, otherwise Open eToro stops at the token call with a `403`.
+
 When your IP addresses change, send the new list before you switch traffic. Calls from any other address are rejected.
 
 ## Run it with Docker
@@ -118,7 +120,7 @@ Every setting is written in one file, [`src/config.js`](src/config.js), next to 
 | `ETORO_JWKS_URL` | Hosts | Normal configuration | `https://www.etoro.com/.well-known/jwks.json` |
 | `ETORO_ISSUER` | Hosts | Normal configuration | `https://www.etoro.com` |
 | `ETORO_SUB_ACCOUNTS_URL` | Hosts | Normal configuration | `https://public-api.etoro.com/api/v1/sub-accounts/me/accounts` |
-| `ETORO_PARTNER_LOGIN_TOKEN_URL` | Hosts | Normal configuration | `https://www.etoro.com/api/sso/v2/silent-login/partner-login-token` |
+| `ETORO_PARTNER_LOGIN_TOKEN_URL` | Hosts | Normal configuration | `https://public-api.etoro.com/api/v1/silent-login/partner-login-token`. Needs the `etoro-public:partner:silent-login:write` permission on your application. |
 | `ETORO_INITIATE_PAGE_URL` | Hosts | Normal configuration | `https://www.etoro.com/accounts/partners/silent-login/initiate`. The same page for every partner. |
 
 The callbacks, user-key address, provider name, and hosts are all per environment. Your callbacks must match what you registered with eToro, character for character.
@@ -152,6 +154,7 @@ The browser holds only this site's session cookie. The tokens, the user key, and
 | Any call with a user key | `403` | The call came from an IP address eToro does not have for you. |
 | Sub-account create | `409` | The link already exists, for example from a second sign-in at the same moment. Read it back with `GET` and use its `externalUserId`. Never create another one. |
 | Flow C partner-login-token | `400` | The `externalUserId` does not belong to your application. Use the value from flow B. |
+| Flow C partner-login-token | `403` | Your application does not hold `etoro-public:partner:silent-login:write`. Ask eToro to grant it. |
 | Flow C, eToro's initiate page | An error page on eToro. The customer does not come back. | The page did not accept the link. Send exactly `client_id`, `redirect_uri`, and `state`, and register `redirect_uri` for your application, character for character. |
 | Flow C callback | "The response does not match the request this browser started" | `state` is missing or different. Start Open eToro again in the same browser. |
 
